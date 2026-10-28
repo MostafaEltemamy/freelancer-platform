@@ -1,0 +1,81 @@
+:root {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #17243b;
+  background: #f3f6fb;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+.setup-page {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.setup-card {
+  width: 100%;
+  max-width: 680px;
+  padding: clamp(24px, 5vw, 48px);
+  border: 1px solid #dce4ef;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 16px 48px rgb(23 36 59 / 6%);
+}
+
+.eyebrow {
+  color: #405ac7;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 12px 0;
+  font-size: clamp(1.8rem, 5vw, 2.5rem);
+}
+
+.description,
+.footnote {
+  color: #536176;
+  line-height: 1.7;
+}
+
+.connection {
+  margin-top: 28px;
+  padding: 16px;
+  border-radius: 10px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.connection--loading {
+  background: #edf2ff;
+  color: #3048a5;
+}
+
+.connection--connected {
+  background: #e9f7ef;
+  color: #17613d;
+}
+
+.connection--error {
+  background: #fff0ef;
+  color: #a12721;
+}
+
+.footnote {
+  margin-bottom: 0;
+  font-size: 0.875rem;
+}
