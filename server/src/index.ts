@@ -1,4 +1,5 @@
 import { app } from './app.js';
+import { prisma } from './database/prisma.js';
 
 const port = Number(process.env.PORT ?? 5001);
 
@@ -15,17 +16,42 @@ server.on('error', (error) => {
   process.exit(1);
 });
 
+let shuttingDown = false;
+
 function shutdown(signal: string): void {
+  if (shuttingDown) return;
+  shuttingDown = true;
+
   console.log(`${signal} received. Closing the server.`);
 
-  server.close(() => {
-    process.exit(0);
-  });
-
-  setTimeout(() => {
+  const timeout = setTimeout(() => {
     console.error('Shutdown timed out.');
     process.exit(1);
-  }, 10_000).unref();
+  }, 10_000);
+
+  timeout.unref();
+
+  server.close((error) => {
+    void finishShutdown(error);
+  });
+
+  async function finishShutdown(error?: Error): Promise<void> {
+    let exitCode = error ? 1 : 0;
+
+    if (error) {
+      console.error('HTTP server shutdown failed:', error);
+    }
+
+    try {
+      await prisma.$disconnect();
+    } catch {
+      console.error('Database connection cleanup failed.');
+      exitCode = 1;
+    } finally {
+      clearTimeout(timeout);
+      process.exit(exitCode);
+    }
+  }
 }
 
 process.once('SIGINT', () => shutdown('SIGINT'));

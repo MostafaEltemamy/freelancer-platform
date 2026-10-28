@@ -22,3 +22,5 @@ uploads/
 # Operating system files
 .DS_Store
 Thumbs.db
+
+/server/src/generated/prisma/
