@@ -1,7 +1,9 @@
+
 :root {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
   color: #17243b;
-  background: #f3f6fb;
+  background: #f4f7fb;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -16,66 +18,211 @@ body {
   min-width: 320px;
 }
 
-.setup-page {
+button,
+input {
+  font: inherit;
+}
+
+a {
+  color: #3457d5;
+}
+
+.auth-layout {
   min-height: 100svh;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: 32px 16px;
 }
 
-.setup-card {
+.auth-card,
+.dashboard-card {
   width: 100%;
-  max-width: 680px;
-  padding: clamp(24px, 5vw, 48px);
-  border: 1px solid #dce4ef;
-  border-radius: 20px;
+  max-width: 480px;
+  padding: clamp(24px, 5vw, 42px);
   background: #fff;
-  box-shadow: 0 16px 48px rgb(23 36 59 / 6%);
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  box-shadow: 0 16px 48px rgb(23 36 59 / 7%);
+}
+
+.brand {
+  display: inline-block;
+  margin-bottom: 30px;
+  color: #253a84;
+  font-size: 1.15rem;
+  font-weight: 800;
+  text-decoration: none;
 }
 
 .eyebrow {
-  color: #405ac7;
-  font-size: 0.8rem;
+  color: #4363d1;
+  font-size: 0.78rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
 h1 {
   margin: 12px 0;
-  font-size: clamp(1.8rem, 5vw, 2.5rem);
+  font-size: clamp(1.7rem, 4vw, 2.25rem);
+  letter-spacing: -0.035em;
 }
 
-.description,
-.footnote {
-  color: #536176;
+.auth-description {
+  color: #64748b;
   line-height: 1.7;
+  margin-bottom: 28px;
 }
 
-.connection {
-  margin-top: 28px;
-  padding: 16px;
+.auth-form,
+.form-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-form {
+  gap: 20px;
+}
+
+.form-field {
+  gap: 8px;
+}
+
+.form-field label {
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.form-field input {
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid #cbd5e1;
   border-radius: 10px;
-  line-height: 1.6;
-  overflow-wrap: anywhere;
+  background: #fff;
+  color: #17243b;
+  outline: none;
 }
 
-.connection--loading {
-  background: #edf2ff;
-  color: #3048a5;
+.form-field input:focus {
+  border-color: #4363d1;
+  box-shadow: 0 0 0 3px rgb(67 99 209 / 13%);
 }
 
-.connection--connected {
-  background: #e9f7ef;
-  color: #17613d;
+.form-field small {
+  color: #64748b;
+  font-size: 0.8rem;
 }
 
-.connection--error {
+.primary-button,
+.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primary-button {
+  background: #3457d5;
+  color: #fff;
+  border: 1px solid #3457d5;
+}
+
+.primary-button:hover {
+  background: #2947b5;
+}
+
+.secondary-button {
+  background: #fff;
+  color: #253a84;
+  border: 1px solid #cbd5e1;
+}
+
+button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.auth-footer {
+  margin: 26px 0 0;
+  text-align: center;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.form-alert {
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.form-alert--error {
   background: #fff0ef;
   color: #a12721;
 }
 
-.footnote {
-  margin-bottom: 0;
-  font-size: 0.875rem;
+.form-alert--success {
+  background: #e9f7ef;
+  color: #17613d;
+  margin-bottom: 20px;
+}
+
+.home-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dashboard-page {
+  min-height: 100svh;
+  padding: 24px;
+}
+
+.dashboard-nav {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.dashboard-nav .brand {
+  margin: 0;
+}
+
+.dashboard-card {
+  max-width: 720px;
+  margin: 72px auto 0;
+  line-height: 1.7;
+}
+
+.page-message {
+  max-width: 640px;
+  margin: 90px auto;
+  padding: 24px;
+  text-align: center;
+}
+
+@media (max-width: 520px) {
+  .dashboard-page {
+    padding: 16px;
+  }
+
+  .dashboard-card {
+    margin-top: 40px;
+  }
+
+  .dashboard-nav {
+    align-items: flex-start;
+  }
+
+  .home-actions {
+    flex-direction: column;
+  }
 }

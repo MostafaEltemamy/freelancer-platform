@@ -1,89 +1,127 @@
-import { useEffect, useState } from 'react';
-import { checkApiHealth } from './lib/health';
 
-type ConnectionState =
-  | { status: 'loading' }
-  | { status: 'connected' }
-  | { status: 'error'; message: string };
+import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom';
 
-function App() {
-  const [connection, setConnection] = useState<ConnectionState>({
-    status: 'loading',
-  });
+import { LoginPage } from './features/auth/LoginPage';
+import { RegisterPage } from './features/auth/RegisterPage';
+import { useAuth } from './features/auth/useAuth';
 
-  useEffect(() => {
-    const controller = new AbortController();
+function ProtectedDashboard() {
+  const { user, status, error, logout, refresh } = useAuth();
 
-    const timeout = window.setTimeout(() => {
-      controller.abort();
-      setConnection({
-        status: 'error',
-        message: 'The connection timed out. Check that the backend is running.',
-      });
-    }, 10_000);
+  if (status === 'loading') {
+    return <main className="page-message">Checking your session…</main>;
+  }
 
-    async function connect() {
-      try {
-        await checkApiHealth(controller.signal);
+  if (status === 'error') {
+    return (
+      <main className="page-message">
+        <h1>Unable to verify your session</h1>
+        <p>{error}</p>
+        <button type="button" onClick={() => void refresh()}>
+          Try again
+        </button>
+      </main>
+    );
+  }
 
-        if (!controller.signal.aborted) {
-          setConnection({ status: 'connected' });
-        }
-      } catch (error: unknown) {
-        if (!controller.signal.aborted) {
-          setConnection({
-            status: 'error',
-            message:
-              error instanceof Error
-                ? error.message
-                : 'Unable to connect to the API.',
-          });
-        }
-      } finally {
-        window.clearTimeout(timeout);
-      }
+  if (status !== 'authenticated' || !user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  async function handleLogout() {
+    try {
+      await logout();
+    } catch {
+      // AuthProvider preserves the error and authenticated state.
     }
-
-    void connect();
-
-    return () => {
-      window.clearTimeout(timeout);
-      controller.abort();
-    };
-  }, []);
+  }
 
   return (
-    <main className="setup-page">
-      <section className="setup-card" aria-labelledby="page-title">
-        <p className="eyebrow">Development checkpoint</p>
+    <main className="dashboard-page">
+      <nav className="dashboard-nav">
+        <Link className="brand" to="/">Freelancer Platform</Link>
 
-        <h1 id="page-title">Freelancer Platform</h1>
-
-        <p className="description">
-          One place to present your work, show your experience, and connect
-          with clients.
-        </p>
-
-        <div
-          className={`connection connection--${connection.status}`}
-          role="status"
-          aria-live="polite"
+        <button
+          className="secondary-button"
+          type="button"
+          onClick={() => void handleLogout()}
         >
-          {connection.status === 'loading' && 'Connecting to the backend…'}
+          Sign out
+        </button>
+      </nav>
 
-          {connection.status === 'connected' &&
-            'Connected — frontend and backend are communicating.'}
-
-          {connection.status === 'error' &&
-            `Connection failed: ${connection.message}`}
-        </div>
-
-        <p className="footnote">
-          This checks API connectivity only. Database setup comes next.
+      <section className="dashboard-card">
+        <p className="eyebrow">Your workspace</p>
+        <h1>Welcome, {user.displayName}!</h1>
+        <p className="auth-description">
+          You're signed in successfully.
         </p>
+        <p><strong>Email:</strong> {user.email}</p>
+        <p>
+          Your freelancer dashboard and portfolio tools
+          will be developed in the next steps.
+        </p>
+
+        {error && (
+          <div className="form-alert form-alert--error" role="alert">
+            {error}
+          </div>
+        )}
       </section>
     </main>
   );
 }
 
-export default App;
+function HomePage() {
+  const { status } = useAuth();
+
+  if (status === 'loading') {
+    return <main className="page-message">Loading…</main>;
+  }
+
+  return (
+    <main className="auth-layout">
+      <section className="auth-card">
+        <p className="eyebrow">Freelancer Platform</p>
+        <h1>Your professional identity, all in one place.</h1>
+        <p className="auth-description">
+          Showcase your work, build your reputation,
+          and connect with clients.
+        </p>
+
+        <div className="home-actions">
+          <Link className="primary-button" to={
+            status === 'authenticated' ? '/dashboard' : '/register'
+          }>
+            {status === 'authenticated'
+              ? 'Go to dashboard'
+              : 'Get started'}
+          </Link>
+
+          {status !== 'authenticated' && (
+            <Link className="secondary-button" to="/login">
+              Sign in
+            </Link>
+          )}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route
+          path="/dashboard"
+          element={<ProtectedDashboard />}
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
