@@ -8,20 +8,39 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:auth": "tsx --test tests/auth-foundation.test.ts",
+    "test:registration": "tsx --test tests/registration-api.test.ts",
+    "test:session": "tsx --test tests/session-tokens.test.ts",
+    "test:login": "tsx --test tests/login-api.test.ts",
+    "test:me": "tsx --test tests/auth-me-api.test.ts",
+    "test:logout": "tsx --test tests/logout-api.test.ts",
+    "test:csrf": "tsx --test tests/csrf-origin-api.test.ts",
+    "test:csrf-session": "tsx --test tests/csrf-session-api.test.ts",
+    "test:cors": "tsx --test tests/cors-api.test.ts",
+    "test:cookie": "tsx --test tests/session-cookie.test.ts",
+    "test:security": "tsx --test tests/auth-security-api.test.ts"
   },
   "keywords": [],
   "type": "module",
   "dependencies": {
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
+    "argon2": "0.45.1",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
     "dotenv": "18.0.9",
     "express": "5.3.0",
-    "pg": "8.23.1"
+    "express-rate-limit": "^8.7.1",
+    "helmet": "^8.3.0",
+    "pg": "8.23.1",
+    "zod": "4.6.7"
   },
   "devDependencies": {
+    "@types/cookie-parser": "^1.4.10",
+    "@types/cors": "^2.8.19",
     "@types/express": "5.0.6",
-    "@types/node": "24.19.2",
+    "@types/node": "^24.19.2",
     "@types/pg": "8.23.1",
     "prisma": "7.10.1",
     "tsx": "4.23.15",
@@ -30,6 +49,7 @@
   "allowScripts": {
     "prisma@7.10.1": true,
     "@prisma/engines@7.10.1": true,
-    "esbuild@0.28.2": true
+    "esbuild@0.28.2": true,
+    "argon2@0.45.1": true
   }
 }

@@ -1,13 +1,43 @@
 import express from 'express';
 import type { ErrorRequestHandler } from 'express';
+
 import { healthRouter } from './modules/health/health.routes.js';
+import { authRouter } from './modules/auth/auth.routes.js';
+
+import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
+
+import { verifyRequestOrigin } from './middleware/verify-request-origin.js';
+import { apiCors } from './middleware/api-cors.js';
 
 export const app = express();
 
+// Disable disclosure of Express information.
 app.disable('x-powered-by');
-app.use(express.json({ limit: '1mb' }));
 
+// HTTP security headers.
+app.use(
+  helmet({
+    strictTransportSecurity:
+      process.env.NODE_ENV === 'production'
+        ? undefined
+        : false,
+  }),
+);
+
+// Request parsing.
+app.use(express.json({ limit: '1mb' }));
+app.use(cookieParser());
+
+// CORS and CSRF origin verification.
+app.use('/api', apiCors);
+app.use('/api', verifyRequestOrigin);
+
+// Application routes.
 app.use('/api', healthRouter);
+app.use('/api/auth', authRouter);
+
+// Keep your existing 404 and centralized error handlers below.
 
 app.use((_req, res) => {
   res.status(404).json({
