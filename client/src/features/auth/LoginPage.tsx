@@ -20,12 +20,29 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const registrationSuccess =
-    (location.state as { registrationSuccess?: boolean } | null)
-      ?.registrationSuccess === true;
+const navigationState = location.state as {
+  registrationSuccess?: boolean;
+  loggedOut?: boolean;
+  from?: unknown;
+} | null;
+
+const registrationSuccess =
+  navigationState?.registrationSuccess === true;
+
+const loggedOut =
+  navigationState?.loggedOut === true;
+
+// Only allow navigation back to our protected dashboard.
+const requestedDestination = navigationState?.from;
+
+const destination =
+  typeof requestedDestination === 'string' &&
+  /^\/dashboard(?:\/|\?|$)/.test(requestedDestination)
+    ? requestedDestination
+    : '/dashboard';
 
   if (status === 'authenticated') {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={destination} replace />;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -41,7 +58,7 @@ export function LoginPage() {
         password,
       });
 
-      navigate('/dashboard', { replace: true });
+      navigate(destination, { replace: true });
     } catch (err) {
       setError(
         err instanceof Error
@@ -70,6 +87,29 @@ export function LoginPage() {
           </div>
         )}
 
+        
+        <p className="auth-description">
+          Access your profile, portfolio, and workspace.
+        </p>
+
+        {registrationSuccess && (
+          <div className="form-alert form-alert--success" role="status">
+            Account created successfully. Please sign in.
+          </div>
+        )}
+
+        {/* Add the logout confirmation here */}
+        {loggedOut && (
+          <div className="form-alert form-alert--success" role="status">
+            You have signed out successfully.
+          </div>
+        )}
+
+        <form className="auth-form" onSubmit={handleSubmit}>
+          {/* Keep your existing email, password, and submit fields here */}
+        </form>
+
+        
         <form className="auth-form" onSubmit={handleSubmit}>
           <div className="form-field">
             <label htmlFor="login-email">Email address</label>
