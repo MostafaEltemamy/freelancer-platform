@@ -125,6 +125,9 @@ model PortfolioProject {
   sortOrder  Int                        @default(0) @map("sort_order")
   isFeatured Boolean                    @default(false) @map("is_featured")
 
+  // Optimistic concurrency control
+  version Int @default(1)
+
   // Audit timestamps
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -147,6 +150,9 @@ model ProfileSkill {
 
   // User-defined display order
   sortOrder Int @default(0) @map("sort_order")
+
+  // Optimistic concurrency control
+  version Int @default(1)
 
   // Audit timestamps
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)

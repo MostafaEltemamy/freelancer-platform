@@ -1,0 +1,5 @@
+ALTER TABLE "portfolio_projects"
+ADD COLUMN "version" INTEGER NOT NULL DEFAULT 1;
+
+ALTER TABLE "profile_skills"
+ADD COLUMN "version" INTEGER NOT NULL DEFAULT 1;
