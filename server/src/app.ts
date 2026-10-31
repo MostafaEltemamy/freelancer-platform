@@ -10,6 +10,11 @@ import helmet from 'helmet';
 import { verifyRequestOrigin } from './middleware/verify-request-origin.js';
 import { apiCors } from './middleware/api-cors.js';
 
+import {
+  freelancerRouter,
+  publicFreelancerRouter,
+} from './modules/freelancer/username.routes.js';
+
 export const app = express();
 
 // Disable disclosure of Express information.
@@ -37,8 +42,13 @@ app.use('/api', verifyRequestOrigin);
 app.use('/api', healthRouter);
 app.use('/api/auth', authRouter);
 
-// Keep your existing 404 and centralized error handlers below.
+// Authenticated freelancer profile functionality.
+app.use('/api/freelancer', freelancerRouter);
 
+// Public, read-only freelancer profiles.
+app.use('/api/public/freelancers', publicFreelancerRouter);
+
+// Keep your existing 404 and centralized error handlers below.
 app.use((_req, res) => {
   res.status(404).json({
     error: {

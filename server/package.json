@@ -20,7 +20,8 @@
     "test:cors": "tsx --test tests/cors-api.test.ts",
     "test:cookie": "tsx --test tests/session-cookie.test.ts",
     "test:security": "tsx --test tests/auth-security-api.test.ts",
-    "test:profile-schema": "tsx --test tests/freelancer-profile-schema.test.ts"
+    "test:profile-schema": "tsx --test tests/freelancer-profile-schema.test.ts",
+    "test:username": "tsx --test tests/username-api.test.ts"
   },
   "keywords": [],
   "type": "module",
