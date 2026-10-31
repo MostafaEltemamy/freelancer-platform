@@ -1,16 +1,12 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 import * as matchers from '@testing-library/jest-dom/matchers';
 import '@testing-library/jest-dom/vitest';
-
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-
 import { ApiError } from '../../lib/api-client';
 import { profileApi } from '../profile/profile.api';
 import { portfolioApi } from './portfolio.api';
-
 import { PortfolioManagementPage } from './PortfolioManagementPage';
-
 import type { FreelancerProfile } from '../onboarding/onboarding.types';
 import type {
   PortfolioProject,
@@ -389,6 +385,12 @@ test('shows API errors without claiming success', async () => {
   expect(
     screen.queryByText('Skill added successfully.'),
   ).not.toBeInTheDocument();
+
+  expect(
+    screen.queryByRole('group', {
+      name: 'Version conflict recovery',
+    }),
+  ).not.toBeInTheDocument();
 });
 
 test('preserves unsaved project changes after a version conflict', async () => {
@@ -400,6 +402,7 @@ test('preserves unsaved project changes after a version conflict', async () => {
     new ApiError(
       'This project has changed since you opened it.',
       409,
+      'STALE_VERSION',
     ),
   );
 
@@ -457,6 +460,7 @@ test('preserves the entered skill name after a version conflict', async () => {
     new ApiError(
       'This skill has changed since you opened it.',
       409,
+      'STALE_VERSION',
     ),
   );
 
@@ -547,4 +551,166 @@ test('reorders skills with their current versions', async () => {
     { id: second.id, version: 3 },
     { id: skill.id, version: 1 },
   ]);
+});
+
+test('reloads newer data only after explicit conflict recovery', async () => {
+  const latestProject: PortfolioProject = {
+    ...project,
+    title: 'Updated from another tab',
+    version: 2,
+  };
+
+  vi.mocked(portfolioApi.listProjects)
+    .mockResolvedValueOnce({
+      projects: [project],
+    })
+    .mockResolvedValueOnce({
+      projects: [latestProject],
+    });
+
+  vi.mocked(portfolioApi.updateProject).mockRejectedValue(
+    new ApiError(
+      'This project has changed since you opened it.',
+      409,
+      'STALE_VERSION',
+    ),
+  );
+
+  renderPortfolio();
+
+  await screen.findByText('Research Dashboard');
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Edit Research Dashboard',
+    }),
+  );
+
+  fireEvent.change(
+    screen.getByLabelText('Project title'),
+    {
+      target: {
+        value: 'My unsaved project draft',
+      },
+    },
+  );
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Save project',
+    }),
+  );
+
+  expect(
+    await screen.findByRole('group', {
+      name: 'Version conflict recovery',
+    }),
+  ).toBeInTheDocument();
+
+  // We must not refresh automatically after a conflict.
+  expect(portfolioApi.listProjects).toHaveBeenCalledTimes(1);
+
+  expect(
+    screen.getByLabelText('Project title'),
+  ).toHaveValue('My unsaved project draft');
+
+  expect(
+    screen.queryByText('Updated from another tab'),
+  ).not.toBeInTheDocument();
+
+  // The user explicitly decides to discard the old draft.
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Discard local edits and load latest',
+    }),
+  );
+
+  expect(
+    await screen.findByText('Updated from another tab'),
+  ).toBeInTheDocument();
+
+  expect(portfolioApi.listProjects).toHaveBeenCalledTimes(2);
+
+  expect(
+    screen.queryByRole('group', {
+      name: 'Version conflict recovery',
+    }),
+  ).not.toBeInTheDocument();
+
+  expect(
+    screen.queryByLabelText('Project title'),
+  ).not.toBeInTheDocument();
+});
+
+test('keeps the unsaved project draft if conflict refresh fails', async () => {
+  vi.mocked(portfolioApi.listProjects)
+    .mockResolvedValueOnce({
+      projects: [project],
+    })
+    .mockRejectedValueOnce(
+      new ApiError(
+        'Unable to load the latest portfolio.',
+        503,
+      ),
+    );
+
+  vi.mocked(portfolioApi.updateProject).mockRejectedValue(
+    new ApiError(
+      'This project has changed since you opened it.',
+      409,
+      'STALE_VERSION',
+    ),
+  );
+
+  renderPortfolio();
+
+  await screen.findByText('Research Dashboard');
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Edit Research Dashboard',
+    }),
+  );
+
+  fireEvent.change(
+    screen.getByLabelText('Project title'),
+    {
+      target: {
+        value: 'Important unsaved research project',
+      },
+    },
+  );
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Save project',
+    }),
+  );
+
+  await screen.findByRole('group', {
+    name: 'Version conflict recovery',
+  });
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Discard local edits and load latest',
+    }),
+  );
+
+  expect(
+    await screen.findByRole('alert'),
+  ).toHaveTextContent(
+    'Unable to load the latest portfolio.',
+  );
+
+  // A failed refresh must not destroy the existing editor.
+  expect(
+    screen.getByLabelText('Project title'),
+  ).toHaveValue('Important unsaved research project');
+
+  expect(
+    screen.getByRole('group', {
+      name: 'Version conflict recovery',
+    }),
+  ).toBeInTheDocument();
 });

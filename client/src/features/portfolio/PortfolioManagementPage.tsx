@@ -1,13 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-
+import { ApiError } from '../../lib/api-client';
 import { portfolioApi } from './portfolio.api';
 import { profileApi } from '../profile/profile.api';
-
 import { ProjectEditor } from './ProjectEditor';
 import { ProjectList } from './ProjectList';
 import { SkillManager } from './SkillManager';
-
 import type { FreelancerProfile } from '../onboarding/onboarding.types';
 import type {
   CreateProjectInput,
@@ -19,6 +17,14 @@ function getError(error: unknown): string {
   return error instanceof Error
     ? error.message
     : 'Unable to complete this operation.';
+}
+
+function isStaleVersionError(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.status === 409 &&
+    error.code === 'STALE_VERSION'
+  );
 }
 
 export function PortfolioManagementPage() {
@@ -35,6 +41,14 @@ export function PortfolioManagementPage() {
 
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  // True only when a mutation failed due to an outdated version.
+  const [hasVersionConflict, setHasVersionConflict] =
+    useState(false);
+
+  // Reset the Skills Manager only after an intentional reload.
+  const [skillEditorGeneration, setSkillEditorGeneration] =
+    useState(0);
 
   async function fetchPortfolio() {
     const [profileResponse, projectsResponse, skillsResponse] =
@@ -79,17 +93,27 @@ export function PortfolioManagementPage() {
   async function reload() {
     if (busy) return;
 
-    setLoading(true);
-    setError(null);
-    setNotice(null);
-    setEditing(undefined);
+    setBusy(true);
 
     try {
+      // Fetch the latest authoritative data first.
+      // Do not discard local editors before this succeeds.
       await fetchPortfolio();
+
+      // The user explicitly chose to load the latest data.
+      setEditing(undefined);
+
+      // Clear any ongoing skill rename or delete confirmation.
+      setSkillEditorGeneration((current) => current + 1);
+
+      setHasVersionConflict(false);
+      setError(null);
+      setNotice(null);
     } catch (err) {
+      // If refreshing fails, keep the existing form and inputs.
       setError(getError(err));
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   }
 
@@ -105,16 +129,35 @@ export function PortfolioManagementPage() {
     setError(null);
     setNotice(null);
 
+    let mutationCompleted = false;
+
     try {
       await action();
+      mutationCompleted = true;
 
-      // Refresh all data from the authoritative backend.
+      // Refresh only after the mutation succeeded.
       await fetchPortfolio();
 
+      setHasVersionConflict(false);
       setNotice(successMessage);
+
       return true;
     } catch (err) {
-      setError(getError(err));
+      if (mutationCompleted) {
+        // The write succeeded, but retrieving refreshed data failed.
+        // Do not incorrectly tell the user their save failed.
+        setError(
+          'Your change was saved, but the latest portfolio ' +
+          'could not be loaded. Refresh the portfolio before ' +
+          'making further changes.',
+        );
+
+        setHasVersionConflict(false);
+      } else {
+        setError(getError(err));
+        setHasVersionConflict(isStaleVersionError(err));
+      }
+
       return false;
     } finally {
       setBusy(false);
@@ -234,6 +277,40 @@ export function PortfolioManagementPage() {
           </div>
         )}
 
+        {hasVersionConflict && (
+          <section
+            className="onboarding-card portfolio-section"
+            role="group"
+            aria-label="Version conflict recovery"
+          >
+            <h2>Newer portfolio changes detected</h2>
+
+            <p className="profile-help">
+              Another browser tab or session has changed this record
+              since you loaded it. Your outdated request was rejected,
+              so the newer saved data has not been overwritten.
+            </p>
+
+            <p className="profile-help">
+              Your current editor has not been cleared. You can keep
+              your edits here for reference, or load the latest saved
+              portfolio. Loading the latest version will discard any
+              unsaved edits in this tab.
+            </p>
+
+            <div className="onboarding-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={busy}
+                onClick={() => void reload()}
+              >
+                Discard local edits and load latest
+              </button>
+            </div>
+          </section>
+        )}
+
         {notice && (
           <div role="status" className="form-alert form-alert--success">
             {notice}
@@ -268,6 +345,7 @@ export function PortfolioManagementPage() {
             onEdit={(project) => {
               setEditing(project);
               setError(null);
+              setHasVersionConflict(false);
             }}
             onDelete={(id, version) =>
               perform(
@@ -290,11 +368,16 @@ export function PortfolioManagementPage() {
             project={editing}
             busy={busy}
             onSave={saveProject}
-            onCancel={() => setEditing(undefined)}
+            onCancel={() => {
+              setEditing(undefined);
+              setHasVersionConflict(false);
+              setError(null);
+            }}
           />
         )}
 
           <SkillManager
+            key={skillEditorGeneration}
             skills={skills}
             canEdit={canEdit}
             busy={busy}
@@ -335,7 +418,7 @@ export function PortfolioManagementPage() {
             disabled={busy}
             onClick={() => void reload()}
           >
-            Refresh portfolio
+            Refresh portfolio (discard unsaved edits)
           </button>
 
           <Link className="secondary-button" to="/portfolio">

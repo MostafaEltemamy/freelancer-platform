@@ -3,14 +3,19 @@ const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL ?? ''
 ).replace(/\/+$/, '');
 
-
 export class ApiError extends Error {
   public readonly status: number;
-  
-  constructor(message: string, status: number) {
+  public readonly code: string | undefined;
+
+  constructor(
+    message: string,
+    status: number,
+    code?: string,
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -25,6 +30,19 @@ function getErrorMessage(data: unknown): string {
   }
 
   return 'Request failed. Please try again.';
+}
+
+function getErrorCode(data: unknown): string | undefined {
+  if (
+    typeof data === 'object' &&
+    data !== null &&
+    'code' in data &&
+    typeof data.code === 'string'
+  ) {
+    return data.code;
+  }
+
+  return undefined;
 }
 
 export async function apiRequest<T>(
@@ -83,12 +101,13 @@ export async function apiRequest<T>(
     }
   }
 
-  if (!response.ok) {
-    throw new ApiError(
-      getErrorMessage(data),
-      response.status,
-    );
-  }
+if (!response.ok) {
+  throw new ApiError(
+    getErrorMessage(data),
+    response.status,
+    getErrorCode(data),
+  );
+}
 
   return data as T;
 }
