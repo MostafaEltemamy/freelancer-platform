@@ -12,6 +12,8 @@ import { ProtectedRoute } from './features/auth/ProtectedRoute';
 import { useAuth } from './features/auth/useAuth';
 import { DashboardPage } from './features/dashboard/DashboardPage';
 import { OnboardingPage } from './features/onboarding/OnboardingPage';
+import { ProfileManagementPage } from './features/profile/ProfileManagementPage';
+import { PublicProfilePage } from './features/profile/PublicProfilePage';
 
 function HomePage() {
   const { status, error, refresh } = useAuth();
@@ -103,7 +105,18 @@ export default function App() {
             path="/onboarding"
             element={<OnboardingPage />}
           />
+
+          <Route
+            path="/profile"
+            element={<ProfileManagementPage />}
+          />
         </Route>
+
+        {/* Public profiles do not require authentication. */}
+        <Route
+          path="/u/:username"
+          element={<PublicProfilePage />}
+        />
 
         <Route
           path="*"

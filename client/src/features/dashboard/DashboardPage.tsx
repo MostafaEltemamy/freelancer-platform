@@ -98,8 +98,8 @@ export function DashboardPage() {
               username, and introduce your skills to potential clients.
             </p>
 
-            <Link className="primary-button" to="/onboarding">
-              Set up or view profile
+            <Link className="primary-button" to="/profile">
+              Manage freelancer profile
             </Link>
           </section>
 

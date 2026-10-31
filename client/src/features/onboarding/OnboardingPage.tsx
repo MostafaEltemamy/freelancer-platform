@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-
 import { onboardingApi } from './onboarding.api';
 
 import type {
@@ -311,16 +310,25 @@ export function OnboardingPage() {
         {completed ? (
           <section className="onboarding-card">
             <h2>Onboarding completed</h2>
+
             <p>
               Your professional information has been saved.
               Your profile is still private.
             </p>
+
             <p>
               Reserved username: <strong>{profile?.username}</strong>
             </p>
-            <Link className="primary-button" to="/dashboard">
-              Return to dashboard
-            </Link>
+
+            <div className="onboarding-actions">
+              <Link className="primary-button" to="/dashboard">
+                Return to dashboard
+              </Link>
+
+              <Link className="secondary-button" to="/profile">
+                Manage your profile
+              </Link>
+            </div>
           </section>
         ) : profile?.status === 'PUBLISHED' ? (
           <section className="onboarding-card">

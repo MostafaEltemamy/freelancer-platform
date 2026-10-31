@@ -461,3 +461,141 @@ a:focus-visible {
     width: 100%;
   }
 }
+
+
+/* Profile management */
+
+.profile-status-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.profile-status-panel h2 {
+  margin: 8px 0;
+}
+
+.profile-status-panel p:last-child {
+  margin-bottom: 0;
+}
+
+.profile-editor,
+.profile-publication-panel {
+  margin-bottom: 20px;
+}
+
+.profile-help {
+  color: #64748b;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.profile-confirmation {
+  margin-top: 24px;
+  padding: 20px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+}
+
+.profile-confirmation h3 {
+  margin: 0 0 10px;
+  font-size: 1.05rem;
+}
+
+.profile-confirmation p {
+  color: #475569;
+  line-height: 1.6;
+}
+
+.profile-confirmation .onboarding-actions {
+  margin-top: 18px;
+}
+
+.form-field input:disabled,
+.form-field textarea:disabled {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+/* Public freelancer profile */
+
+.public-profile-layout {
+  min-height: 100svh;
+  padding: 28px 20px 72px;
+}
+
+.public-profile-nav {
+  max-width: 880px;
+  margin: 0 auto 36px;
+}
+
+.public-profile-nav .brand {
+  margin: 0;
+}
+
+.public-profile-card {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: clamp(28px, 6vw, 56px);
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  box-shadow: 0 12px 40px rgb(23 36 59 / 5%);
+}
+
+.public-profile-card h1 {
+  max-width: 750px;
+  overflow-wrap: anywhere;
+}
+
+.public-profile-username {
+  margin: 12px 0 4px;
+  font-weight: 700;
+  color: #4363d1;
+  overflow-wrap: anywhere;
+}
+
+.public-profile-location {
+  color: #64748b;
+  margin-top: 18px;
+}
+
+.public-profile-section {
+  margin-top: 36px;
+  padding-top: 28px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.public-profile-section h2 {
+  margin: 0 0 18px;
+  font-size: 1.2rem;
+}
+
+.public-profile-bio {
+  color: #475569;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .profile-status-panel {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .profile-status-panel .secondary-button {
+    width: 100%;
+  }
+
+  .public-profile-layout {
+    padding: 20px 14px 48px;
+  }
+
+  .public-profile-nav {
+    margin-bottom: 24px;
+  }
+}
