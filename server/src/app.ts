@@ -9,6 +9,7 @@ import helmet from 'helmet';
 
 import { verifyRequestOrigin } from './middleware/verify-request-origin.js';
 import { apiCors } from './middleware/api-cors.js';
+import { profileRouter } from './modules/freelancer/profile.routes.js';
 
 import {
   freelancerRouter,
@@ -44,6 +45,7 @@ app.use('/api/auth', authRouter);
 
 // Authenticated freelancer profile functionality.
 app.use('/api/freelancer', freelancerRouter);
+app.use('/api/freelancer', profileRouter);
 
 // Public, read-only freelancer profiles.
 app.use('/api/public/freelancers', publicFreelancerRouter);

@@ -1,4 +1,3 @@
-
 import type {
   Request,
   Response,
@@ -41,6 +40,7 @@ export async function requireSession(
     const session = await prisma.session.findFirst({
       where: {
         tokenHash,
+        revokedAt: null,
 
         // Expired sessions cannot authenticate.
         expiresAt: {
