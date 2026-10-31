@@ -102,16 +102,18 @@ export function DashboardPage() {
               Manage freelancer profile
             </Link>
           </section>
-
+          
           <section className="dashboard-panel">
-            <h2>My workspace</h2>
+            <h2>My portfolio</h2>
+
             <p>
-              Your projects and professional tools
-              will be available here.
+              Add portfolio projects, highlight your professional work,
+              and manage the skills that represent your expertise.
             </p>
-            <span className="feature-label">
-              Planned
-            </span>
+
+            <Link className="primary-button" to="/portfolio">
+              Manage portfolio
+            </Link>
           </section>
         </div>
       </div>

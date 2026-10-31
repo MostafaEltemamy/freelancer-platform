@@ -14,6 +14,7 @@ import { DashboardPage } from './features/dashboard/DashboardPage';
 import { OnboardingPage } from './features/onboarding/OnboardingPage';
 import { ProfileManagementPage } from './features/profile/ProfileManagementPage';
 import { PublicProfilePage } from './features/profile/PublicProfilePage';
+import { PortfolioManagementPage } from './features/portfolio/PortfolioManagementPage';
 
 function HomePage() {
   const { status, error, refresh } = useAuth();
@@ -109,6 +110,11 @@ export default function App() {
           <Route
             path="/profile"
             element={<ProfileManagementPage />}
+          />
+
+          <Route
+            path="/portfolio"
+            element={<PortfolioManagementPage />}
           />
         </Route>
 
