@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-
 import { ApiError } from '../../lib/api-client';
 import { profileApi } from './profile.api';
+import { PublicPortfolioSections } from './PublicPortfolioSections';
 
 import type {
   PublicFreelancerProfile,
@@ -155,6 +155,7 @@ function PublicProfileContent({ username }: { username: string }) {
           )}
         </header>
 
+        /* Existing professional biography */
         {profile.bio && (
           <section className="public-profile-section">
             <h2>About</h2>
@@ -163,6 +164,11 @@ function PublicProfileContent({ username }: { username: string }) {
             </p>
           </section>
         )}
+
+        <PublicPortfolioSections
+          projects={profile.projects}
+          skills={profile.skills}
+        />
 
         {website && (
           <section className="public-profile-section">

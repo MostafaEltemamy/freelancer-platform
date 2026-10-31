@@ -407,6 +407,8 @@ test('renders published professional information', async () => {
       city: 'Dubai',
       countryCode: 'AE',
       websiteUrl: 'https://example.com',
+      projects: [],
+      skills: [],
     },
   });
 
@@ -466,6 +468,8 @@ test('recovers from a temporary public API failure', async () => {
         city: null,
         countryCode: null,
         websiteUrl: null,
+        projects: [],
+        skills: [],
       },
     });
 
@@ -490,4 +494,132 @@ test('recovers from a temporary public API failure', async () => {
   ).toBeInTheDocument();
 
   expect(profileApi.getPublic).toHaveBeenCalledTimes(2);
+});
+
+
+test('displays featured projects, technologies and skills', async () => {
+  vi.mocked(profileApi.getPublic).mockResolvedValue({
+    profile: {
+      username: 'testfreelancer',
+      headline: 'Professional Software Developer',
+      bio: 'I build professional applications for clients.',
+      city: 'Dubai',
+      countryCode: 'AE',
+      websiteUrl: null,
+      projects: [
+        {
+          slug: 'featured-work',
+          title: 'Featured Research Dashboard',
+          summary: 'A dashboard for research results.',
+          description: 'Built using React and TypeScript.',
+          role: 'Lead Developer',
+          projectUrl: 'https://example.com/project',
+          sourceUrl: null,
+          technologies: ['React', 'TypeScript'],
+          startedOn: '2026-01-01T00:00:00.000Z',
+          endedOn: null,
+          isFeatured: true,
+        },
+        {
+          slug: 'second-work',
+          title: 'Laboratory Management System',
+          summary: null,
+          description: null,
+          role: null,
+          projectUrl: 'javascript:alert(1)',
+          sourceUrl: null,
+          technologies: ['PostgreSQL'],
+          startedOn: null,
+          endedOn: null,
+          isFeatured: false,
+        },
+      ],
+      skills: [
+        { name: 'React' },
+        { name: 'Molecular Biology' },
+        { name: 'Python' },
+      ],
+    },
+  });
+
+  renderPublic();
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'Portfolio projects',
+    }),
+  ).toBeInTheDocument();
+
+  const projectTitles = Array.from(
+    document.querySelectorAll(
+      '.public-portfolio-project h3',
+    ),
+  ).map((node) => node.textContent);
+
+  expect(projectTitles).toEqual([
+    'Featured Research Dashboard',
+    'Laboratory Management System',
+  ]);
+
+  expect(screen.getByText('Featured')).toBeInTheDocument();
+  expect(screen.getByText('TypeScript')).toBeInTheDocument();
+
+  expect(
+    screen.getByRole('link', { name: 'View project' }),
+  ).toHaveAttribute(
+    'href',
+    'https://example.com/project',
+  );
+
+  // Unsafe external URLs must not become links.
+  expect(
+    screen.getAllByRole('link', { name: 'View project' }),
+  ).toHaveLength(1);
+
+  const displayedSkills = Array.from(
+    document.querySelectorAll(
+      '.public-portfolio-skills li',
+    ),
+  ).map((node) => node.textContent);
+
+  expect(displayedSkills).toEqual([
+    'React',
+    'Molecular Biology',
+    'Python',
+  ]);
+});
+
+test('handles published profiles without portfolio content', async () => {
+  vi.mocked(profileApi.getPublic).mockResolvedValue({
+    profile: {
+      username: 'testfreelancer',
+      headline: 'Professional Software Developer',
+      bio: null,
+      city: null,
+      countryCode: null,
+      websiteUrl: null,
+      projects: [],
+      skills: [],
+    },
+  });
+
+  renderPublic();
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'Professional Software Developer',
+    }),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.queryByRole('heading', {
+      name: 'Portfolio projects',
+    }),
+  ).not.toBeInTheDocument();
+
+  expect(
+    screen.queryByRole('heading', {
+      name: 'Professional skills',
+    }),
+  ).not.toBeInTheDocument();
 });

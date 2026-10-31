@@ -781,3 +781,80 @@ a:focus-visible {
     width: 100%;
   }
 }
+
+
+/* Public portfolio presentation */
+
+.public-portfolio-projects {
+  display: grid;
+  gap: 20px;
+}
+
+.public-portfolio-project {
+  padding: 24px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.public-portfolio-project-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.public-portfolio-project-heading h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  overflow-wrap: anywhere;
+}
+
+.public-portfolio-summary {
+  margin: 14px 0;
+  font-weight: 500;
+  line-height: 1.7;
+}
+
+.public-portfolio-meta {
+  color: #64748b;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.public-portfolio-project .portfolio-chip-row {
+  margin-top: 18px;
+}
+
+.public-portfolio-project .onboarding-actions {
+  margin-top: 20px;
+}
+
+.public-portfolio-skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.public-portfolio-skills .portfolio-chip {
+  font-size: 0.9rem;
+  padding: 9px 14px;
+}
+
+@media (max-width: 600px) {
+  .public-portfolio-project {
+    padding: 18px;
+  }
+
+  .public-portfolio-project .onboarding-actions {
+    flex-direction: column;
+  }
+
+  .public-portfolio-project .onboarding-actions a {
+    width: 100%;
+  }
+}

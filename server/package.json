@@ -26,7 +26,8 @@
     "test:publication": "tsx --test tests/freelancer-publication-api.test.ts",
     "test:portfolio-schema": "tsx --test tests/portfolio-schema.test.ts",
     "test:projects": "tsx --test tests/portfolio-project-api.test.ts",
-    "test:skills": "tsx --test tests/portfolio-skill-api.test.ts"
+    "test:skills": "tsx --test tests/portfolio-skill-api.test.ts",
+    "test:public-portfolio": "tsx --test tests/public-portfolio-api.test.ts"
   },
   "keywords": [],
   "type": "module",

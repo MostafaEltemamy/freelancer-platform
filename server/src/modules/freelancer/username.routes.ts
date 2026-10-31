@@ -1,8 +1,6 @@
 import { Router } from 'express';
 import { rateLimit } from 'express-rate-limit';
-
 import { prisma } from '../../database/prisma.js';
-
 import { requireSession } from '../auth/require-session.js';
 import { requireCsrf } from '../auth/require-csrf.js';
 
@@ -165,6 +163,7 @@ publicFreelancerRouter.get(
           publishedAt: { not: null },
           onboardingCompletedAt: { not: null },
         },
+        
         select: {
           username: true,
           headline: true,
@@ -172,6 +171,45 @@ publicFreelancerRouter.get(
           city: true,
           countryCode: true,
           websiteUrl: true,
+
+          // Only projects explicitly marked PUBLIC.
+          projects: {
+            where: {
+              visibility: 'PUBLIC',
+            },
+            orderBy: [
+              { isFeatured: 'desc' },
+              { sortOrder: 'asc' },
+              { createdAt: 'asc' },
+              { id: 'asc' },
+            ],
+            take: 100,
+            select: {
+              slug: true,
+              title: true,
+              summary: true,
+              description: true,
+              role: true,
+              projectUrl: true,
+              sourceUrl: true,
+              technologies: true,
+              startedOn: true,
+              endedOn: true,
+              isFeatured: true,
+            },
+          },
+
+          // Skills belonging to this published freelancer.
+          skills: {
+            orderBy: [
+              { sortOrder: 'asc' },
+              { id: 'asc' },
+            ],
+            take: 100,
+            select: {
+              name: true,
+            },
+          },
         },
       });
 
