@@ -1,84 +1,36 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-
+import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 
 export function DashboardPage() {
-  const navigate = useNavigate();
-  const { user, logout } = useAuth();
-
-  const [loggingOut, setLoggingOut] = useState(false);
-  const [logoutError, setLogoutError] = useState<string | null>(
-    null,
-  );
+  const { user } = useAuth();
 
   if (!user) {
     return null;
   }
 
-  async function handleLogout() {
-    if (loggingOut) return;
-
-    setLoggingOut(true);
-    setLogoutError(null);
-
-    try {
-      await logout();
-
-      navigate('/login', {
-        replace: true,
-        state: { loggedOut: true },
-      });
-    } catch (error) {
-      setLogoutError(
-        error instanceof Error
-          ? error.message
-          : 'Unable to sign out. Please try again.',
-      );
-    } finally {
-      setLoggingOut(false);
-    }
-  }
-
   return (
     <main className="dashboard-page">
-      <nav className="dashboard-nav" aria-label="Dashboard navigation">
-        <Link className="brand" to="/">
-          Freelancer Platform
-        </Link>
-
-        <button
-          type="button"
-          className="secondary-button"
-          onClick={() => void handleLogout()}
-          disabled={loggingOut}
-        >
-          {loggingOut ? 'Signing out…' : 'Sign out'}
-        </button>
-      </nav>
-
       <div className="dashboard-main">
         <header className="dashboard-heading">
-          <p className="eyebrow">My workspace</p>
+          <p className="eyebrow">
+            My workspace
+          </p>
+
           <h1>Welcome, {user.displayName}</h1>
+
           <p className="auth-description">
-            Manage your professional presence from one place.
+            Manage your professional presence
+            from one place.
           </p>
         </header>
-
-        {logoutError && (
-          <div
-            className="form-alert form-alert--error"
-            role="alert"
-          >
-            {logoutError}
-          </div>
-        )}
 
         <div className="dashboard-grid">
           <section className="dashboard-panel">
             <h2>My account</h2>
-            <p>Your account is active and authenticated.</p>
+
+            <p>
+              Your account is active and authenticated.
+            </p>
 
             <dl className="account-details">
               <dt>Name</dt>
@@ -89,29 +41,35 @@ export function DashboardPage() {
             </dl>
           </section>
 
-          
           <section className="dashboard-panel">
             <h2>My freelancer profile</h2>
 
             <p>
-              Create your professional identity, reserve a unique
-              username, and introduce your skills to potential clients.
+              Build your professional identity,
+              introduce your work, and manage
+              your public presence.
             </p>
 
-            <Link className="primary-button" to="/profile">
+            <Link
+              className="primary-button"
+              to="/profile"
+            >
               Manage freelancer profile
             </Link>
           </section>
-          
+
           <section className="dashboard-panel">
             <h2>My portfolio</h2>
 
             <p>
-              Add portfolio projects, highlight your professional work,
-              and manage the skills that represent your expertise.
+              Showcase your projects and
+              professional skills to clients.
             </p>
 
-            <Link className="primary-button" to="/portfolio">
+            <Link
+              className="primary-button"
+              to="/portfolio"
+            >
               Manage portfolio
             </Link>
           </section>

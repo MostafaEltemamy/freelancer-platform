@@ -11,6 +11,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
 } from '@testing-library/react';
 
 import {
@@ -24,6 +25,7 @@ import { LoginPage } from './LoginPage';
 import { ProtectedRoute } from './ProtectedRoute';
 
 import { DashboardPage } from '../dashboard/DashboardPage';
+import { AppShell } from '../../layouts/AppShell';
 
 import { authApi } from './auth.api';
 import { ApiError } from '../../lib/api-client';
@@ -50,24 +52,27 @@ const testUser: AuthUser = {
 };
 
 // Render the real authentication provider and routing.
+
 function renderAuthApp(initialPath = '/dashboard') {
   return render(
     <AuthProvider>
       <MemoryRouter initialEntries={[initialPath]}>
         <Routes>
+          {/* Public login route */}
           <Route
             path="/login"
             element={<LoginPage />}
           />
 
-          <Route
-            path="/dashboard"
-            element={<ProtectedRoute />}
-          >
-            <Route
-              index
-              element={<DashboardPage />}
-            />
+          {/* Authenticated application */}
+          <Route element={<ProtectedRoute />}>
+            {/* Shared navigation and sign-out controls */}
+            <Route element={<AppShell />}>
+              <Route
+                path="/dashboard"
+                element={<DashboardPage />}
+              />
+            </Route>
           </Route>
         </Routes>
       </MemoryRouter>
@@ -262,7 +267,11 @@ test('logs out and removes access to the dashboard', async () => {
   });
 
   fireEvent.click(
-    screen.getByRole('button', {
+    within(
+      screen.getByRole('banner', {
+        name: 'Workspace top bar',
+      }),
+    ).getByRole('button', {
       name: 'Sign out',
     }),
   );
@@ -295,7 +304,11 @@ test('does not claim logout succeeded when it fails', async () => {
   });
 
   fireEvent.click(
-    screen.getByRole('button', {
+    within(
+      screen.getByRole('banner', {
+        name: 'Workspace top bar',
+      }),
+    ).getByRole('button', {
       name: 'Sign out',
     }),
   );
