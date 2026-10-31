@@ -1,21 +1,10 @@
-
 import { Router } from 'express';
 import type { NextFunction, Response } from 'express';
 import type { ZodIssue } from 'zod';
-
 import { rateLimit } from 'express-rate-limit';
-
-import {
-  Prisma,
-} from '../../generated/prisma/client.js';
-
-import {
-  requireSession,
-} from '../auth/require-session.js';
-
-import {
-  requireCsrf,
-} from '../auth/require-csrf.js';
+import {Prisma} from '../../generated/prisma/client.js';
+import {requireSession} from '../auth/require-session.js';
+import {requireCsrf} from '../auth/require-csrf.js';
 
 import {
   PortfolioSetupRequiredError,
@@ -26,6 +15,7 @@ import {
   skillIdSchema,
   createSkillSchema,
   updateSkillSchema,
+  deleteSkillSchema,
   reorderSkillsSchema,
 } from './skill.schemas.js';
 
@@ -38,6 +28,7 @@ import {
   SkillNotFoundError,
   SkillLimitError,
   SkillOrderError,
+  SkillVersionConflictError,
 } from './skill.service.js';
 
 export const skillRouter = Router();
@@ -50,6 +41,10 @@ const mutationLimiter = rateLimit({
   standardHeaders: 'draft-8',
   legacyHeaders: false,
 });
+
+// -------------------------------------------------
+// Validation errors
+// -------------------------------------------------
 
 function invalidInput(
   res: Response,
@@ -64,6 +59,10 @@ function invalidInput(
   });
 }
 
+// -------------------------------------------------
+// Application errors
+// -------------------------------------------------
+
 function handleError(
   error: unknown,
   res: Response,
@@ -72,6 +71,14 @@ function handleError(
   if (error instanceof SkillNotFoundError) {
     res.status(404).json({
       error: error.message,
+    });
+    return;
+  }
+
+  if (error instanceof SkillVersionConflictError) {
+    res.status(409).json({
+      error: error.message,
+      code: 'STALE_VERSION',
     });
     return;
   }
@@ -101,7 +108,10 @@ function handleError(
   next(error);
 }
 
+// -------------------------------------------------
 // GET /api/freelancer/skills
+// -------------------------------------------------
+
 skillRouter.get(
   '/skills',
   async (_req, res, next) => {
@@ -117,7 +127,10 @@ skillRouter.get(
   },
 );
 
+// -------------------------------------------------
 // POST /api/freelancer/skills
+// -------------------------------------------------
+
 skillRouter.post(
   '/skills',
   requireCsrf,
@@ -143,8 +156,11 @@ skillRouter.post(
   },
 );
 
+// -------------------------------------------------
 // PUT /api/freelancer/skills/order
-// Must be registered before /skills/:id.
+// -------------------------------------------------
+
+// Register before /skills/:id.
 skillRouter.put(
   '/skills/order',
   requireCsrf,
@@ -170,7 +186,10 @@ skillRouter.put(
   },
 );
 
+// -------------------------------------------------
 // PATCH /api/freelancer/skills/:id
+// -------------------------------------------------
+
 skillRouter.patch(
   '/skills/:id',
   requireCsrf,
@@ -200,17 +219,21 @@ skillRouter.patch(
   },
 );
 
+// -------------------------------------------------
 // DELETE /api/freelancer/skills/:id
+// -------------------------------------------------
+
 skillRouter.delete(
   '/skills/:id',
   requireCsrf,
   mutationLimiter,
   async (req, res, next) => {
     const id = skillIdSchema.safeParse(req.params.id);
+    const input = deleteSkillSchema.safeParse(req.body);
 
-    if (!id.success) {
+    if (!id.success || !input.success) {
       res.status(400).json({
-        error: 'Invalid skill ID.',
+        error: 'A valid skill ID and current version are required.',
       });
       return;
     }
@@ -219,6 +242,7 @@ skillRouter.delete(
       await deleteMySkill(
         res.locals.authUser.id as string,
         id.data,
+        input.data.version,
       );
 
       res.status(204).end();

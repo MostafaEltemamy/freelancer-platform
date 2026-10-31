@@ -78,6 +78,7 @@ const skill: PortfolioSkill = {
   id: '22222222-2222-4222-8222-222222222222',
   name: 'C++',
   sortOrder: 0,
+  version: 1,
   createdAt: '2026-10-31T10:00:00.000Z',
   updatedAt: '2026-10-31T10:00:00.000Z',
 };
@@ -280,7 +281,11 @@ test('adds a professional skill', async () => {
 });
 
 test('renames a professional skill', async () => {
-  const renamed = { ...skill, name: 'C#' };
+    const renamed = {
+    ...skill,
+    name: 'C#',
+    version: 2,
+  };
 
   vi.mocked(portfolioApi.listSkills)
     .mockResolvedValueOnce({ skills: [skill] })
@@ -314,6 +319,7 @@ test('renames a professional skill', async () => {
   expect(portfolioApi.updateSkill).toHaveBeenCalledWith(
     skill.id,
     { name: 'C#' },
+    1,
   );
 });
 
@@ -440,4 +446,105 @@ test('preserves unsaved project changes after a version conflict', async () => {
   expect(
     screen.queryByText('Project updated successfully.'),
   ).not.toBeInTheDocument();
+});
+
+test('preserves the entered skill name after a version conflict', async () => {
+  vi.mocked(portfolioApi.listSkills).mockResolvedValue({
+    skills: [skill],
+  });
+
+  vi.mocked(portfolioApi.updateSkill).mockRejectedValue(
+    new ApiError(
+      'This skill has changed since you opened it.',
+      409,
+    ),
+  );
+
+  renderPortfolio();
+
+  await screen.findByText('C++');
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Rename C++',
+    }),
+  );
+
+  const input = screen.getByLabelText('Rename skill C++');
+
+  fireEvent.change(input, {
+    target: { value: 'Molecular Biology' },
+  });
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Save skill',
+    }),
+  );
+
+  expect(
+    await screen.findByRole('alert'),
+  ).toHaveTextContent(
+    'This skill has changed since you opened it.',
+  );
+
+  expect(input).toHaveValue('Molecular Biology');
+
+  expect(portfolioApi.updateSkill).toHaveBeenCalledWith(
+    skill.id,
+    { name: 'Molecular Biology' },
+    1,
+  );
+
+  expect(
+    screen.queryByText('Skill renamed successfully.'),
+  ).not.toBeInTheDocument();
+});
+
+
+test('reorders skills with their current versions', async () => {
+  const second = {
+    ...skill,
+    id: '44444444-4444-4444-8444-444444444444',
+    name: 'React',
+    sortOrder: 1,
+    version: 3,
+  };
+
+  vi.mocked(portfolioApi.listSkills)
+    .mockResolvedValueOnce({
+      skills: [skill, second],
+    })
+    .mockResolvedValueOnce({
+      skills: [
+        { ...second, sortOrder: 0, version: 4 },
+        { ...skill, sortOrder: 1, version: 2 },
+      ],
+    });
+
+  vi.mocked(portfolioApi.reorderSkills).mockResolvedValue({
+    skills: [
+      { ...second, sortOrder: 0, version: 4 },
+      { ...skill, sortOrder: 1, version: 2 },
+    ],
+  });
+
+  renderPortfolio();
+
+  await screen.findByText('React');
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Move React up',
+    }),
+  );
+
+  expect(
+    await screen.findByText('Skill order updated.'),
+  ).toBeInTheDocument();
+
+  expect(portfolioApi.reorderSkills).toHaveBeenCalledWith([
+    { id: second.id, version: 3 },
+    { id: skill.id, version: 1 },
+  ]);
 });

@@ -30,20 +30,43 @@ export const skillNameSchema = z.string()
 
 export const skillIdSchema = z.uuid();
 
+// Use a positive integer that can safely be incremented
+// in PostgreSQL's 32-bit integer column.
+export const skillVersionSchema = z.number()
+  .int()
+  .min(1)
+  .max(2_147_483_646);
+
+// POST /skills
 export const createSkillSchema = z.strictObject({
   name: skillNameSchema,
 });
 
+// PATCH /skills/:id
 export const updateSkillSchema = z.strictObject({
   name: skillNameSchema,
+  version: skillVersionSchema,
 });
 
+// DELETE /skills/:id
+export const deleteSkillSchema = z.strictObject({
+  version: skillVersionSchema,
+});
+
+// PUT /skills/order
 export const reorderSkillsSchema = z.strictObject({
-  ids: z.array(skillIdSchema)
+  items: z.array(
+    z.strictObject({
+      id: skillIdSchema,
+      version: skillVersionSchema,
+    }),
+  )
     .min(1)
     .max(100)
     .refine(
-      (ids) => new Set(ids).size === ids.length,
+      (items) =>
+        new Set(items.map((item) => item.id)).size ===
+        items.length,
       'Skill IDs must be unique.',
     ),
 });

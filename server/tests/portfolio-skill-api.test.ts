@@ -1,18 +1,10 @@
 import 'dotenv/config';
-
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, test } from 'node:test';
-
 import { prisma } from '../src/database/prisma.js';
-
-import {
-  generateSessionToken,
-} from '../src/modules/auth/session-tokens.js';
-
-import {
-  SESSION_COOKIE_NAME,
-} from '../src/modules/auth/session-cookie.js';
+import {generateSessionToken} from '../src/modules/auth/session-tokens.js';
+import {SESSION_COOKIE_NAME} from '../src/modules/auth/session-cookie.js';
 
 const BASE =
   process.env.TEST_API_BASE_URL ?? 'http://localhost:5001';
@@ -42,6 +34,18 @@ interface Session {
   id: string;
   cookie: string;
   csrf: string;
+}
+
+interface SkillRecord {
+  id: string;
+  name: string;
+  sortOrder: number;
+  version: number;
+}
+
+interface VersionedItem {
+  id: string;
+  version: number;
 }
 
 async function makeSession(
@@ -157,12 +161,35 @@ test('Professional Skills API', async (t) => {
   let withoutProfile!: Session;
 
   const skillIds = new Map<string, string>();
+  const versions = new Map<string, number>();
+
   let otherSkillId = '';
+  let lastOrderBeforeReorder: VersionedItem[] = [];
+  let lastOrderedIds: string[] = [];
+
+  function versionOf(id: string): number {
+    const version = versions.get(id);
+    assert.notEqual(
+      version,
+      undefined,
+      `Missing version for skill ${id}`,
+    );
+    return version!;
+  }
+
+  function orderPayload(ids: string[]) {
+    return {
+      items: ids.map((id) => ({
+        id,
+        version: versionOf(id),
+      })),
+    };
+  }
 
   async function addSkill(
     session: Session,
     name: string,
-  ) {
+  ): Promise<SkillRecord> {
     const response = await request(
       path,
       'POST',
@@ -173,16 +200,16 @@ test('Professional Skills API', async (t) => {
     assert.equal(response.status, 201);
 
     const data = await response.json() as {
-      skill: {
-        id: string;
-        name: string;
-        sortOrder: number;
-      };
+      skill: SkillRecord;
     };
+
+    assert.equal(data.skill.version, 1);
+    versions.set(data.skill.id, data.skill.version);
 
     return data.skill;
   }
 
+  // 1
   await t.test('creates isolated test accounts', async () => {
     owner = await makeSession('owner');
     other = await makeSession('other');
@@ -191,12 +218,13 @@ test('Professional Skills API', async (t) => {
     assert.notEqual(owner.cookie, other.cookie);
   });
 
+  // 2
   await t.test('requires authentication', async () => {
     const response = await request(path, 'GET');
-
     assert.equal(response.status, 401);
   });
 
+  // 3
   await t.test('requires CSRF protection', async () => {
     const response = await request(
       path,
@@ -209,6 +237,7 @@ test('Professional Skills API', async (t) => {
     assert.equal(response.status, 403);
   });
 
+  // 4
   await t.test('requires an existing freelancer profile', async () => {
     const emptyList = await request(
       path,
@@ -234,6 +263,7 @@ test('Professional Skills API', async (t) => {
     assert.equal(create.status, 409);
   });
 
+  // 5
   await t.test('rejects invalid and privileged fields', async () => {
     const cases = [
       { name: '' },
@@ -256,11 +286,13 @@ test('Professional Skills API', async (t) => {
     }
   });
 
+  // 6
   await t.test('creates and normalizes C++', async () => {
     const skill = await addSkill(owner, '  C++  ');
 
     assert.equal(skill.name, 'C++');
     assert.equal(skill.sortOrder, 0);
+    assert.equal(skill.version, 1);
 
     skillIds.set('C++', skill.id);
 
@@ -272,6 +304,7 @@ test('Professional Skills API', async (t) => {
     assert.equal(saved?.normalizedName, 'c++');
   });
 
+  // 7
   await t.test('rejects case-insensitive duplicates', async () => {
     const response = await request(
       path,
@@ -283,6 +316,7 @@ test('Professional Skills API', async (t) => {
     assert.equal(response.status, 409);
   });
 
+  // 8
   await t.test('supports technical skill names', async () => {
     const names = [
       '.NET',
@@ -299,6 +333,7 @@ test('Professional Skills API', async (t) => {
     assert.equal(skillIds.size, 5);
   });
 
+  // 9
   await t.test('normalizes duplicate technical names', async () => {
     const response = await request(
       path,
@@ -310,6 +345,7 @@ test('Professional Skills API', async (t) => {
     assert.equal(response.status, 409);
   });
 
+  // 10
   await t.test('allows the same skill for another user', async () => {
     const skill = await addSkill(other, 'C++');
 
@@ -317,17 +353,13 @@ test('Professional Skills API', async (t) => {
     assert.ok(otherSkillId);
   });
 
+  // 11
   await t.test('lists only the owners skills', async () => {
     const response = await request(path, 'GET', owner);
-
     assert.equal(response.status, 200);
 
     const data = await response.json() as {
-      skills: {
-        id: string;
-        name: string;
-        sortOrder: number;
-      }[];
+      skills: SkillRecord[];
     };
 
     assert.deepEqual(
@@ -340,9 +372,15 @@ test('Professional Skills API', async (t) => {
       [0, 1, 2, 3, 4],
     );
 
+    assert.deepEqual(
+      data.skills.map((item) => item.version),
+      [1, 1, 1, 1, 1],
+    );
+
     assert.equal(data.skills.length, 5);
   });
 
+  // 12
   await t.test('prevents cross-account modification', async () => {
     const ownerSkillId = skillIds.get('C++')!;
 
@@ -350,19 +388,58 @@ test('Professional Skills API', async (t) => {
       `${path}/${ownerSkillId}`,
       'PATCH',
       other,
-      { name: 'Unauthorized Rename' },
+      {
+        name: 'Unauthorized Rename',
+        version: versionOf(ownerSkillId),
+      },
     );
 
     const remove = await request(
       `${path}/${ownerSkillId}`,
       'DELETE',
       other,
+      { version: versionOf(ownerSkillId) },
     );
 
     assert.equal(rename.status, 404);
     assert.equal(remove.status, 404);
   });
 
+  // 13
+  await t.test('requires versions for skill mutations', async () => {
+    const id = skillIds.get('C++')!;
+
+    const rename = await request(
+      `${path}/${id}`,
+      'PATCH',
+      owner,
+      { name: 'C#' },
+    );
+
+    const remove = await request(
+      `${path}/${id}`,
+      'DELETE',
+      owner,
+    );
+
+    const reorder = await request(
+      `${path}/order`,
+      'PUT',
+      owner,
+      { ids: [...skillIds.values()] },
+    );
+
+    assert.deepEqual(
+      [
+        rename.status,
+        remove.status,
+        reorder.status,
+      ],
+      [400, 400, 400],
+    );
+  });
+
+  // 14
   await t.test('renames skills and checks collisions', async () => {
     const skillId = skillIds.get('C++')!;
 
@@ -370,28 +447,96 @@ test('Professional Skills API', async (t) => {
       `${path}/${skillId}`,
       'PATCH',
       owner,
-      { name: 'C#' },
+      {
+        name: 'C#',
+        version: versionOf(skillId),
+      },
     );
 
     assert.equal(renamed.status, 200);
 
     const renamedData = await renamed.json() as {
-      skill: { name: string; id: string };
+      skill: SkillRecord;
     };
 
     assert.equal(renamedData.skill.name, 'C#');
     assert.equal(renamedData.skill.id, skillId);
+    assert.equal(renamedData.skill.version, 2);
+
+    versions.set(skillId, renamedData.skill.version);
+
+    const nodeId = skillIds.get('Node.js')!;
 
     const collision = await request(
-      `${path}/${skillIds.get('Node.js')!}`,
+      `${path}/${nodeId}`,
       'PATCH',
       owner,
-      { name: 'c#' },
+      {
+        name: 'c#',
+        version: versionOf(nodeId),
+      },
     );
 
     assert.equal(collision.status, 409);
+
+    const unchanged = await prisma.profileSkill.findUniqueOrThrow({
+      where: { id: nodeId },
+      select: { name: true, version: true },
+    });
+
+    assert.equal(unchanged.name, 'Node.js');
+    assert.equal(unchanged.version, 1);
   });
 
+  // 15
+  await t.test('rejects stale skill edits and deletions', async () => {
+    const skillId = skillIds.get('C++')!;
+    const staleVersion = versionOf(skillId) - 1;
+
+    const rename = await request(
+      `${path}/${skillId}`,
+      'PATCH',
+      owner,
+      {
+        name: 'Outdated Rename',
+        version: staleVersion,
+      },
+    );
+
+    const remove = await request(
+      `${path}/${skillId}`,
+      'DELETE',
+      owner,
+      { version: staleVersion },
+    );
+
+    assert.equal(rename.status, 409);
+    assert.equal(remove.status, 409);
+
+    const renameError = await rename.json() as {
+      code: string;
+    };
+
+    const deleteError = await remove.json() as {
+      code: string;
+    };
+
+    assert.equal(renameError.code, 'STALE_VERSION');
+    assert.equal(deleteError.code, 'STALE_VERSION');
+
+    const saved = await prisma.profileSkill.findUniqueOrThrow({
+      where: { id: skillId },
+      select: {
+        name: true,
+        version: true,
+      },
+    });
+
+    assert.equal(saved.name, 'C#');
+    assert.equal(saved.version, versionOf(skillId));
+  });
+
+  // 16
   await t.test('reorders all skills atomically', async () => {
     const ids = [
       skillIds.get('React Native')!,
@@ -401,17 +546,24 @@ test('Professional Skills API', async (t) => {
       skillIds.get('C++')!,
     ];
 
+    const payload = orderPayload(ids);
+
+    // Keep an outdated snapshot for the next test.
+    lastOrderBeforeReorder = payload.items.map(
+      (item) => ({ ...item }),
+    );
+
     const response = await request(
       `${path}/order`,
       'PUT',
       owner,
-      { ids },
+      payload,
     );
 
     assert.equal(response.status, 200);
 
     const data = await response.json() as {
-      skills: { id: string; sortOrder: number }[];
+      skills: SkillRecord[];
     };
 
     assert.deepEqual(
@@ -423,14 +575,66 @@ test('Professional Skills API', async (t) => {
       data.skills.map((item) => item.sortOrder),
       [0, 1, 2, 3, 4],
     );
+
+    for (const skill of data.skills) {
+      const previousVersion = versionOf(skill.id);
+
+      assert.equal(
+        skill.version,
+        previousVersion + 1,
+      );
+
+      versions.set(skill.id, skill.version);
+    }
+
+    lastOrderedIds = ids;
   });
 
+  // 17
+  await t.test('rejects stale reorders without partial updates', async () => {
+    const outdated = await request(
+      `${path}/order`,
+      'PUT',
+      owner,
+      {
+        items: lastOrderBeforeReorder,
+      },
+    );
+
+    assert.equal(outdated.status, 409);
+
+    const error = await outdated.json() as {
+      code: string;
+    };
+
+    assert.equal(error.code, 'STALE_VERSION');
+
+    const list = await request(path, 'GET', owner);
+    assert.equal(list.status, 200);
+
+    const data = await list.json() as {
+      skills: SkillRecord[];
+    };
+
+    assert.deepEqual(
+      data.skills.map((item) => item.id),
+      lastOrderedIds,
+    );
+
+    for (const skill of data.skills) {
+      assert.equal(skill.version, versionOf(skill.id));
+    }
+  });
+
+  // 18
   await t.test('rejects invalid skill orders', async () => {
+    const id = skillIds.get('C++')!;
+
     const incomplete = await request(
       `${path}/order`,
       'PUT',
       owner,
-      { ids: [skillIds.get('C++')!] },
+      orderPayload([id]),
     );
 
     assert.equal(incomplete.status, 409);
@@ -440,9 +644,9 @@ test('Professional Skills API', async (t) => {
       'PUT',
       owner,
       {
-        ids: [
-          skillIds.get('C++')!,
-          skillIds.get('C++')!,
+        items: [
+          { id, version: versionOf(id) },
+          { id, version: versionOf(id) },
         ],
       },
     );
@@ -453,12 +657,13 @@ test('Professional Skills API', async (t) => {
       `${path}/order`,
       'PUT',
       owner,
-      { ids: [otherSkillId] },
+      orderPayload([otherSkillId]),
     );
 
     assert.equal(foreign.status, 409);
   });
 
+  // 19
   await t.test('blocks changes to published profiles', async () => {
     const complete = await request(
       '/api/freelancer/onboarding/complete',
@@ -476,6 +681,8 @@ test('Professional Skills API', async (t) => {
 
     assert.equal(published.status, 200);
 
+    const skillId = skillIds.get('C++')!;
+
     const create = await request(
       path,
       'POST',
@@ -484,23 +691,27 @@ test('Professional Skills API', async (t) => {
     );
 
     const rename = await request(
-      `${path}/${skillIds.get('C++')!}`,
+      `${path}/${skillId}`,
       'PATCH',
       owner,
-      { name: 'Python' },
+      {
+        name: 'Python',
+        version: versionOf(skillId),
+      },
     );
 
     const remove = await request(
-      `${path}/${skillIds.get('C++')!}`,
+      `${path}/${skillId}`,
       'DELETE',
       owner,
+      { version: versionOf(skillId) },
     );
 
     const reorder = await request(
       `${path}/order`,
       'PUT',
       owner,
-      { ids: [...skillIds.values()] },
+      orderPayload([...skillIds.values()]),
     );
 
     assert.deepEqual(
@@ -522,6 +733,7 @@ test('Professional Skills API', async (t) => {
     assert.equal(stillReadable.status, 200);
   });
 
+  // 20
   await t.test('unpublishes and allows deletion', async () => {
     const unpublish = await request(
       '/api/freelancer/profile/unpublish',
@@ -531,29 +743,37 @@ test('Professional Skills API', async (t) => {
 
     assert.equal(unpublish.status, 200);
 
+    const skillId = skillIds.get('C++')!;
+
     const removed = await request(
-      `${path}/${skillIds.get('C++')!}`,
+      `${path}/${skillId}`,
       'DELETE',
       owner,
+      { version: versionOf(skillId) },
     );
 
     assert.equal(removed.status, 204);
 
     const profile = await prisma.freelancerProfile.findUnique({
       where: { userId: owner.id },
-      select: { onboardingCompletedAt: true },
+      select: {
+        onboardingCompletedAt: true,
+      },
     });
 
-    assert.equal(profile?.onboardingCompletedAt, null);
+    assert.equal(
+      profile?.onboardingCompletedAt,
+      null,
+    );
   });
 
+  // 21
   await t.test('preserves other freelancer skills', async () => {
     const response = await request(path, 'GET', other);
-
     assert.equal(response.status, 200);
 
     const data = await response.json() as {
-      skills: { id: string; name: string }[];
+      skills: SkillRecord[];
     };
 
     assert.deepEqual(
@@ -562,12 +782,18 @@ test('Professional Skills API', async (t) => {
     );
 
     assert.equal(data.skills[0]?.name, 'C++');
+    assert.equal(data.skills[0]?.version, 1);
 
-    const ownerSkills = await request(path, 'GET', owner);
+    const ownerSkills = await request(
+      path,
+      'GET',
+      owner,
+    );
+
     assert.equal(ownerSkills.status, 200);
 
     const ownerData = await ownerSkills.json() as {
-      skills: unknown[];
+      skills: SkillRecord[];
     };
 
     assert.equal(ownerData.skills.length, 4);

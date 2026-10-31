@@ -1,12 +1,6 @@
 import { prisma } from '../../database/prisma.js';
-
-import {
-  withEditablePortfolio,
-} from './portfolio-guard.js';
-
-import {
-  skillKey,
-} from './skill.schemas.js';
+import {withEditablePortfolio} from './portfolio-guard.js';
+import {skillKey} from './skill.schemas.js';
 
 import type {
   CreateSkillInput,
@@ -20,9 +14,14 @@ const SKILL_SELECT = {
   id: true,
   name: true,
   sortOrder: true,
+  version: true,
   createdAt: true,
   updatedAt: true,
 } as const;
+
+// -------------------------------------------------
+// Errors
+// -------------------------------------------------
 
 export class SkillNotFoundError extends Error {
   constructor() {
@@ -45,7 +44,19 @@ export class SkillOrderError extends Error {
   }
 }
 
-// Return only skills belonging to the authenticated user.
+export class SkillVersionConflictError extends Error {
+  constructor() {
+    super(
+      'This skill has changed since you opened it. Reload the latest version before saving.',
+    );
+    this.name = 'SkillVersionConflictError';
+  }
+}
+
+// -------------------------------------------------
+// List skills belonging to the authenticated user
+// -------------------------------------------------
+
 export async function listMySkills(userId: string) {
   const profile = await prisma.freelancerProfile.findUnique({
     where: { userId },
@@ -67,7 +78,10 @@ export async function listMySkills(userId: string) {
   });
 }
 
-// Create a skill at the end of the current order.
+// -------------------------------------------------
+// Create a skill
+// -------------------------------------------------
+
 export async function createMySkill(
   userId: string,
   input: CreateSkillInput,
@@ -104,7 +118,10 @@ export async function createMySkill(
   );
 }
 
-// Rename a skill without changing its identity or order.
+// -------------------------------------------------
+// Rename a skill with optimistic concurrency
+// -------------------------------------------------
+
 export async function updateMySkill(
   userId: string,
   skillId: string,
@@ -113,60 +130,106 @@ export async function updateMySkill(
   return withEditablePortfolio(
     userId,
     async (tx, profileId) => {
+      const existing = await tx.profileSkill.findFirst({
+        where: {
+          id: skillId,
+          profileId,
+        },
+        select: {
+          version: true,
+        },
+      });
+
+      if (!existing) {
+        throw new SkillNotFoundError();
+      }
+
+      if (existing.version !== input.version) {
+        throw new SkillVersionConflictError();
+      }
+
       const updated = await tx.profileSkill.updateMany({
         where: {
           id: skillId,
           profileId,
+          version: input.version,
         },
         data: {
           name: input.name,
           normalizedName: skillKey(input.name),
+          version: {
+            increment: 1,
+          },
         },
       });
 
       if (updated.count !== 1) {
-        throw new SkillNotFoundError();
+        throw new SkillVersionConflictError();
       }
 
-      const skill = await tx.profileSkill.findUnique({
-        where: { id: skillId },
+      return tx.profileSkill.findUniqueOrThrow({
+        where: {
+          id: skillId,
+        },
         select: SKILL_SELECT,
       });
-
-      if (!skill) {
-        throw new SkillNotFoundError();
-      }
-
-      return skill;
     },
   );
 }
 
-// Delete only a skill belonging to the authenticated user.
+// -------------------------------------------------
+// Delete a skill with optimistic concurrency
+// -------------------------------------------------
+
 export async function deleteMySkill(
   userId: string,
   skillId: string,
+  expectedVersion: number,
 ) {
   return withEditablePortfolio(
     userId,
     async (tx, profileId) => {
-      const deleted = await tx.profileSkill.deleteMany({
+      const existing = await tx.profileSkill.findFirst({
         where: {
           id: skillId,
           profileId,
         },
+        select: {
+          version: true,
+        },
       });
 
-      if (deleted.count !== 1) {
+      if (!existing) {
         throw new SkillNotFoundError();
       }
 
-      return { id: skillId };
+      if (existing.version !== expectedVersion) {
+        throw new SkillVersionConflictError();
+      }
+
+      const deleted = await tx.profileSkill.deleteMany({
+        where: {
+          id: skillId,
+          profileId,
+          version: expectedVersion,
+        },
+      });
+
+      if (deleted.count !== 1) {
+        throw new SkillVersionConflictError();
+      }
+
+      return {
+        id: skillId,
+      };
     },
   );
 }
 
-// Change the order of the entire skill collection atomically.
+// -------------------------------------------------
+// Reorder all skills atomically
+// -------------------------------------------------
+
 export async function reorderMySkills(
   userId: string,
   input: ReorderSkillsInput,
@@ -175,39 +238,72 @@ export async function reorderMySkills(
     userId,
     async (tx, profileId) => {
       const existing = await tx.profileSkill.findMany({
-        where: { profileId },
-        select: { id: true },
+        where: {
+          profileId,
+        },
+        select: {
+          id: true,
+          version: true,
+        },
       });
 
-      const expected = new Set(
-        existing.map((skill) => skill.id),
+      const current = new Map(
+        existing.map((skill) => [
+          skill.id,
+          skill.version,
+        ]),
       );
 
+      // The request must contain every owned skill.
       if (
-        expected.size !== input.ids.length ||
-        input.ids.some((id) => !expected.has(id))
+        existing.length !== input.items.length ||
+        input.items.some((item) => !current.has(item.id))
       ) {
         throw new SkillOrderError();
       }
 
-      for (let index = 0; index < input.ids.length; index++) {
-        const result = await tx.profileSkill.updateMany({
+      // Reject if any supplied version is outdated.
+      if (
+        input.items.some(
+          (item) =>
+            current.get(item.id) !== item.version,
+        )
+      ) {
+        throw new SkillVersionConflictError();
+      }
+
+      // All updates execute in the existing transaction.
+      // A failure rolls back every ordering change.
+      for (
+        let index = 0;
+        index < input.items.length;
+        index++
+      ) {
+        const item = input.items[index]!;
+
+        const updated = await tx.profileSkill.updateMany({
           where: {
-            id: input.ids[index]!,
+            id: item.id,
             profileId,
+            version: item.version,
           },
           data: {
             sortOrder: index,
+            version: {
+              increment: 1,
+            },
           },
         });
 
-        if (result.count !== 1) {
-          throw new SkillOrderError();
+        if (updated.count !== 1) {
+          throw new SkillVersionConflictError();
         }
       }
 
       return tx.profileSkill.findMany({
-        where: { profileId },
+        where: {
+          profileId,
+        },
         select: SKILL_SELECT,
         orderBy: [
           { sortOrder: 'asc' },

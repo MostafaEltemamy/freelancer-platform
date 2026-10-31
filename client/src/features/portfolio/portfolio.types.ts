@@ -1,5 +1,10 @@
 export type ProjectVisibility = 'PRIVATE' | 'PUBLIC';
 
+export interface VersionedRecord {
+  id: string;
+  version: number;
+}
+
 export interface PortfolioProject {
   id: string;
   slug: string;
@@ -12,29 +17,21 @@ export interface PortfolioProject {
   sourceUrl: string | null;
   technologies: string[];
 
-  // Serialized dates are returned as ISO date-time strings.
   startedOn: string | null;
   endedOn: string | null;
 
   visibility: ProjectVisibility;
   sortOrder: number;
   isFeatured: boolean;
+  version: number;
 
   createdAt: string;
   updatedAt: string;
-
-  version: number;
-}
-
-export interface VersionedRecord {
-  id: string;
-  version: number;
 }
 
 export interface CreateProjectInput {
   slug: string;
   title: string;
-
   summary?: string | null;
   description?: string | null;
   role?: string | null;
@@ -43,18 +40,12 @@ export interface CreateProjectInput {
   sourceUrl?: string | null;
   technologies?: string[];
 
-  // Inputs must use YYYY-MM-DD, not full timestamps.
   startedOn?: string | null;
   endedOn?: string | null;
 
   visibility?: ProjectVisibility;
   sortOrder?: number;
   isFeatured?: boolean;
-}
-
-export interface VersionedRecord {
-  id: string;
-  version: number;
 }
 
 export type UpdateProjectInput = Partial<CreateProjectInput>;
@@ -71,6 +62,7 @@ export interface PortfolioSkill {
   id: string;
   name: string;
   sortOrder: number;
+  version: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -85,8 +77,4 @@ export interface SkillResponse {
 
 export interface SkillInput {
   name: string;
-}
-
-export interface ReorderInput {
-  ids: string[];
 }

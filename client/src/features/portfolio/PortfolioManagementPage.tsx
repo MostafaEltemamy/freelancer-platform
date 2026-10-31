@@ -294,35 +294,39 @@ export function PortfolioManagementPage() {
           />
         )}
 
-        <SkillManager
-          skills={skills}
-          canEdit={canEdit}
-          busy={busy}
-          onAdd={(name) =>
-            perform(
-              () => portfolioApi.createSkill({ name }),
-              'Skill added successfully.',
-            )
-          }
-          onRename={(id, name) =>
-            perform(
-              () => portfolioApi.updateSkill(id, { name }),
-              'Skill renamed successfully.',
-            )
-          }
-          onDelete={(id) =>
-            perform(
-              () => portfolioApi.deleteSkill(id),
-              'Skill removed successfully.',
-            )
-          }
-          onReorder={(ids) =>
-            perform(
-              () => portfolioApi.reorderSkills(ids),
-              'Skill order updated.',
-            )
-          }
-        />
+          <SkillManager
+            skills={skills}
+            canEdit={canEdit}
+            busy={busy}
+            onAdd={(name) =>
+              perform(
+                () => portfolioApi.createSkill({ name }),
+                'Skill added successfully.',
+              )
+            }
+            onRename={(id, name, version) =>
+              perform(
+                () => portfolioApi.updateSkill(
+                  id,
+                  { name },
+                  version,
+                ),
+                'Skill renamed successfully.',
+              )
+            }
+            onDelete={(id, version) =>
+              perform(
+                () => portfolioApi.deleteSkill(id, version),
+                'Skill removed successfully.',
+              )
+            }
+            onReorder={(items) =>
+              perform(
+                () => portfolioApi.reorderSkills(items),
+                'Skill order updated.',
+              )
+            }
+          />
 
         <div className="onboarding-actions">
           <button

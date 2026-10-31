@@ -9,7 +9,6 @@ import type {
   SkillsResponse,
   SkillResponse,
   SkillInput,
-  ReorderInput,
   VersionedRecord,
 } from './portfolio.types';
 
@@ -21,9 +20,9 @@ function itemPath(base: string, id: string): string {
 }
 
 export const portfolioApi = {
-  // -------------------------------------------------
+  // -----------------------------------------
   // PROJECTS
-  // -------------------------------------------------
+  // -----------------------------------------
 
   listProjects(): Promise<ProjectsResponse> {
     return apiRequest<ProjectsResponse>(PROJECTS_PATH);
@@ -72,15 +71,17 @@ export const portfolioApi = {
     );
   },
 
-  // -------------------------------------------------
+  // -----------------------------------------
   // SKILLS
-  // -------------------------------------------------
+  // -----------------------------------------
 
   listSkills(): Promise<SkillsResponse> {
     return apiRequest<SkillsResponse>(SKILLS_PATH);
   },
 
-  createSkill(input: SkillInput): Promise<SkillResponse> {
+  createSkill(
+    input: SkillInput,
+  ): Promise<SkillResponse> {
     return protectedWrite<SkillResponse>(
       SKILLS_PATH,
       'POST',
@@ -91,30 +92,33 @@ export const portfolioApi = {
   updateSkill(
     id: string,
     input: SkillInput,
+    version: number,
   ): Promise<SkillResponse> {
     return protectedWrite<SkillResponse>(
       itemPath(SKILLS_PATH, id),
       'PATCH',
-      input,
+      { ...input, version },
     );
   },
 
-  async deleteSkill(id: string): Promise<void> {
+  async deleteSkill(
+    id: string,
+    version: number,
+  ): Promise<void> {
     await protectedWrite<void>(
       itemPath(SKILLS_PATH, id),
       'DELETE',
+      { version },
     );
   },
 
   reorderSkills(
-    ids: string[],
+    items: VersionedRecord[],
   ): Promise<SkillsResponse> {
-    const input: ReorderInput = { ids };
-
     return protectedWrite<SkillsResponse>(
       `${SKILLS_PATH}/order`,
       'PUT',
-      input,
+      { items },
     );
   },
 };

@@ -11,18 +11,17 @@ vi.mock('../../lib/protected-write', () => ({
   protectedWrite: vi.fn(),
 }));
 
-const projectId = '11111111-1111-4111-8111-111111111111';
-const skillId = '22222222-2222-4222-8222-222222222222';
+const projectId =
+  '11111111-1111-4111-8111-111111111111';
+
+const skillId =
+  '22222222-2222-4222-8222-222222222222';
 
 beforeEach(() => {
   vi.resetAllMocks();
 });
 
-// =====================================================
-// TEST 1 — List projects
-// =====================================================
-
-test('lists the authenticated freelancer projects', async () => {
+test('lists freelancer projects', async () => {
   await portfolioApi.listProjects();
 
   expect(apiRequest).toHaveBeenCalledWith(
@@ -30,11 +29,7 @@ test('lists the authenticated freelancer projects', async () => {
   );
 });
 
-// =====================================================
-// TEST 2 — Create project
-// =====================================================
-
-test('creates a project using a protected POST request', async () => {
+test('creates a project using protected POST', async () => {
   const input = {
     slug: 'research-dashboard',
     title: 'Research Dashboard',
@@ -50,65 +45,34 @@ test('creates a project using a protected POST request', async () => {
   );
 });
 
-// =====================================================
-// TEST 3 — Update project with version
-// =====================================================
-
-test('updates an existing project using PATCH and version', async () => {
+test('updates a project with its version', async () => {
   const input = {
     title: 'Updated Research Dashboard',
     visibility: 'PUBLIC' as const,
   };
 
-  const version = 2;
-
-  await portfolioApi.updateProject(
-    projectId,
-    input,
-    version,
-  );
+  await portfolioApi.updateProject(projectId, input, 2);
 
   expect(protectedWrite).toHaveBeenCalledWith(
     `/api/freelancer/projects/${projectId}`,
     'PATCH',
-    {
-      ...input,
-      version,
-    },
+    { ...input, version: 2 },
   );
 });
 
-// =====================================================
-// TEST 4 — Delete project with version
-// =====================================================
-
-test('deletes a project with its expected version', async () => {
-  const version = 3;
-
-  await portfolioApi.deleteProject(
-    projectId,
-    version,
-  );
+test('deletes a project with its version', async () => {
+  await portfolioApi.deleteProject(projectId, 3);
 
   expect(protectedWrite).toHaveBeenCalledWith(
     `/api/freelancer/projects/${projectId}`,
     'DELETE',
-    {
-      version,
-    },
+    { version: 3 },
   );
 });
 
-// =====================================================
-// TEST 5 — Reorder projects with version records
-// =====================================================
-
-test('reorders projects using PUT and versioned records', async () => {
+test('reorders projects with versioned records', async () => {
   const items = [
-    {
-      id: projectId,
-      version: 2,
-    },
+    { id: projectId, version: 2 },
     {
       id: '33333333-3333-4333-8333-333333333333',
       version: 1,
@@ -120,17 +84,11 @@ test('reorders projects using PUT and versioned records', async () => {
   expect(protectedWrite).toHaveBeenCalledWith(
     '/api/freelancer/projects/order',
     'PUT',
-    {
-      items,
-    },
+    { items },
   );
 });
 
-// =====================================================
-// TEST 6 — List skills
-// =====================================================
-
-test('lists the authenticated freelancer skills', async () => {
+test('lists freelancer skills', async () => {
   await portfolioApi.listSkills();
 
   expect(apiRequest).toHaveBeenCalledWith(
@@ -138,60 +96,57 @@ test('lists the authenticated freelancer skills', async () => {
   );
 });
 
-// =====================================================
-// TEST 7 — Create, rename and delete skills
-// =====================================================
-
-test('creates, renames and deletes a skill', async () => {
-  await portfolioApi.createSkill({
-    name: 'C++',
-  });
+test('creates a skill without a version', async () => {
+  await portfolioApi.createSkill({ name: 'C++' });
 
   expect(protectedWrite).toHaveBeenCalledWith(
     '/api/freelancer/skills',
     'POST',
-    {
-      name: 'C++',
-    },
+    { name: 'C++' },
   );
+});
 
-  await portfolioApi.updateSkill(skillId, {
-    name: 'C#',
-  });
+test('renames a skill with its expected version', async () => {
+  await portfolioApi.updateSkill(
+    skillId,
+    { name: 'C#' },
+    2,
+  );
 
   expect(protectedWrite).toHaveBeenCalledWith(
     `/api/freelancer/skills/${skillId}`,
     'PATCH',
     {
       name: 'C#',
+      version: 2,
     },
   );
+});
 
-  await portfolioApi.deleteSkill(skillId);
+test('deletes a skill with its expected version', async () => {
+  await portfolioApi.deleteSkill(skillId, 3);
 
   expect(protectedWrite).toHaveBeenCalledWith(
     `/api/freelancer/skills/${skillId}`,
     'DELETE',
+    { version: 3 },
   );
 });
 
-// =====================================================
-// TEST 8 — Reorder skills
-// =====================================================
-
-test('reorders skills with the complete ID list', async () => {
-  const ids = [
-    skillId,
-    '44444444-4444-4444-8444-444444444444',
+test('reorders skills using versioned records', async () => {
+  const items = [
+    { id: skillId, version: 3 },
+    {
+      id: '44444444-4444-4444-8444-444444444444',
+      version: 1,
+    },
   ];
 
-  await portfolioApi.reorderSkills(ids);
+  await portfolioApi.reorderSkills(items);
 
   expect(protectedWrite).toHaveBeenCalledWith(
     '/api/freelancer/skills/order',
     'PUT',
-    {
-      ids,
-    },
+    { items },
   );
 });
