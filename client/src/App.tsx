@@ -1,4 +1,3 @@
-
 import {
   BrowserRouter,
   Link,
@@ -12,6 +11,7 @@ import { RegisterPage } from './features/auth/RegisterPage';
 import { ProtectedRoute } from './features/auth/ProtectedRoute';
 import { useAuth } from './features/auth/useAuth';
 import { DashboardPage } from './features/dashboard/DashboardPage';
+import { OnboardingPage } from './features/onboarding/OnboardingPage';
 
 function HomePage() {
   const { status, error, refresh } = useAuth();
@@ -97,6 +97,11 @@ export default function App() {
           <Route
             path="/dashboard"
             element={<DashboardPage />}
+          />
+
+          <Route
+            path="/onboarding"
+            element={<OnboardingPage />}
           />
         </Route>
 

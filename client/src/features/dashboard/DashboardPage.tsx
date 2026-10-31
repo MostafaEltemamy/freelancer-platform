@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -90,15 +89,18 @@ export function DashboardPage() {
             </dl>
           </section>
 
+          
           <section className="dashboard-panel">
-            <h2>My portfolio</h2>
+            <h2>My freelancer profile</h2>
+
             <p>
-              Your portfolio editor will appear here
-              once the portfolio module is ready.
+              Create your professional identity, reserve a unique
+              username, and introduce your skills to potential clients.
             </p>
-            <span className="feature-label">
-              Coming next
-            </span>
+
+            <Link className="primary-button" to="/onboarding">
+              Set up or view profile
+            </Link>
           </section>
 
           <section className="dashboard-panel">

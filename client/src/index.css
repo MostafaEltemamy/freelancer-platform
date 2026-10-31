@@ -315,3 +315,149 @@ a:focus-visible {
     padding: 22px;
   }
 }
+
+
+/* Freelancer onboarding */
+
+.onboarding-layout {
+  min-height: 100svh;
+  padding: 36px 20px 72px;
+}
+
+.onboarding-container {
+  max-width: 850px;
+  margin: 0 auto;
+}
+
+.onboarding-header {
+  margin-bottom: 28px;
+}
+
+.onboarding-header .brand {
+  margin-bottom: 26px;
+}
+
+.onboarding-header .auth-description {
+  max-width: 650px;
+  margin-bottom: 0;
+}
+
+.onboarding-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 24px;
+  margin: 24px 0;
+}
+
+.onboarding-progress-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.step-active,
+.step-done {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 0.85rem;
+}
+
+.step-active {
+  background: #3457d5;
+  color: #fff;
+}
+
+.step-done {
+  background: #e9f7ef;
+  color: #17613d;
+}
+
+.onboarding-card {
+  padding: clamp(24px, 5vw, 40px);
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  box-shadow: 0 12px 40px rgb(23 36 59 / 5%);
+}
+
+.onboarding-card h2 {
+  margin: 0 0 16px;
+  font-size: 1.35rem;
+}
+
+.onboarding-card > p {
+  line-height: 1.7;
+}
+
+.onboarding-container > .form-alert {
+  margin-bottom: 18px;
+}
+
+.form-field textarea {
+  width: 100%;
+  min-height: 140px;
+  padding: 13px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  color: #17243b;
+  font: inherit;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.form-field textarea:focus {
+  outline: none;
+  border-color: #4363d1;
+  box-shadow: 0 0 0 3px rgb(67 99 209 / 13%);
+}
+
+.onboarding-two-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.onboarding-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.username-preview {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f1f5fb;
+  color: #405477;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.onboarding-card [role="status"] {
+  color: #17613d;
+}
+
+@media (max-width: 600px) {
+  .onboarding-layout {
+    padding: 20px 14px 48px;
+  }
+
+  .onboarding-two-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .onboarding-actions {
+    flex-direction: column;
+  }
+
+  .onboarding-actions button {
+    width: 100%;
+  }
+}
