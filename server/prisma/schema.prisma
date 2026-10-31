@@ -20,6 +20,7 @@ model User {
 
   passwordCredential PasswordCredential?
   sessions           Session[]
+  freelancerProfile  FreelancerProfile?
 
   @@map("users")
 }
@@ -49,4 +50,41 @@ model Session {
   @@index([userId])
   @@index([expiresAt])
   @@map("sessions")
+}
+
+enum ProfileStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model FreelancerProfile {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @unique @map("user_id") @db.Uuid
+
+  // Public identity
+  username String? @unique @db.VarChar(30)
+  headline String? @db.VarChar(160)
+  bio      String? @db.Text
+
+  // Professional location
+  city        String? @db.VarChar(100)
+  countryCode String? @map("country_code") @db.VarChar(2)
+
+  // External website
+  websiteUrl String? @map("website_url") @db.VarChar(2048)
+
+  // Onboarding and publication
+  status                ProfileStatus @default(DRAFT)
+  onboardingCompletedAt DateTime?     @map("onboarding_completed_at") @db.Timestamptz(3)
+  publishedAt           DateTime?     @map("published_at") @db.Timestamptz(3)
+
+  // Audit timestamps
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  // Ownership
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, publishedAt])
+  @@map("freelancer_profiles")
 }
