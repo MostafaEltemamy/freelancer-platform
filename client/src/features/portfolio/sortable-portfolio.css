@@ -1,0 +1,51 @@
+.sortable-portfolio-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sortable-portfolio-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+  border-radius: 12px;
+  transition: opacity 140ms ease;
+}
+
+.sortable-portfolio-row--dragging {
+  opacity: 0.55;
+}
+
+.sortable-portfolio-handle {
+  flex: 0 0 36px;
+  align-self: center;
+  min-height: 48px;
+  padding: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #475569;
+  cursor: grab;
+  touch-action: none;
+  font-size: 22px;
+}
+
+.sortable-portfolio-handle:active {
+  cursor: grabbing;
+}
+
+.sortable-portfolio-handle:focus-visible {
+  outline: 3px solid #4f46e5;
+  outline-offset: 2px;
+}
+
+.sortable-portfolio-handle:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.sortable-portfolio-content {
+  flex: 1;
+  min-width: 0;
+}
