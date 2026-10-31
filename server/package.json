@@ -22,7 +22,8 @@
     "test:security": "tsx --test tests/auth-security-api.test.ts",
     "test:profile-schema": "tsx --test tests/freelancer-profile-schema.test.ts",
     "test:username": "tsx --test tests/username-api.test.ts",
-    "test:onboarding": "tsx --test tests/freelancer-onboarding-api.test.ts"
+    "test:onboarding": "tsx --test tests/freelancer-onboarding-api.test.ts",
+    "test:publication": "tsx --test tests/freelancer-publication-api.test.ts"
   },
   "keywords": [],
   "type": "module",

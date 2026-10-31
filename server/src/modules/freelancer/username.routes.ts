@@ -140,6 +140,9 @@ freelancerRouter.post(
 publicFreelancerRouter.get(
   '/:username',
   async (req, res, next) => {
+    // Public visibility may change at any time.
+    res.setHeader('Cache-Control', 'no-store');
+
     const parsed = usernameSyntaxSchema.safeParse(
       req.params.username,
     );

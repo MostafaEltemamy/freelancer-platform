@@ -1,5 +1,6 @@
 import { prisma } from '../../database/prisma.js';
 import type { SaveProfileInput } from './profile.schemas.js';
+import { getMissingProfileFields } from './profile.requirements.js';
 
 const PROFILE_SELECT = {
   id: true,
@@ -107,19 +108,7 @@ export async function completeMyOnboarding(userId: string) {
     return getMyProfile(userId);
   }
 
-  const missingFields: string[] = [];
-
-  if (!profile.headline || profile.headline.trim().length < 10) {
-    missingFields.push('headline');
-  }
-
-  if (!profile.bio || profile.bio.trim().length < 30) {
-    missingFields.push('bio');
-  }
-
-  if (!profile.countryCode) {
-    missingFields.push('countryCode');
-  }
+  const missingFields = getMissingProfileFields(profile);
 
   if (missingFields.length > 0) {
     throw new IncompleteOnboardingError(missingFields);

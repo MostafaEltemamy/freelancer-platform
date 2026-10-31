@@ -15,6 +15,13 @@ import {
   ProfileConflictError,
 } from './profile.service.js';
 
+import {
+  publishMyProfile,
+  unpublishMyProfile,
+  PublicationNotReadyError,
+  OnboardingNotCompletedError,
+} from './profile-publication.service.js';
+
 export const profileRouter = Router();
 
 // Every endpoint requires an authenticated session.
@@ -114,3 +121,74 @@ profileRouter.post(
     }
   },
 );
+
+
+// POST /api/freelancer/profile/publish
+profileRouter.post(
+  '/profile/publish',
+  requireCsrf,
+  async (_req, res, next) => {
+    try {
+      const userId = res.locals.authUser.id as string;
+
+      const profile = await publishMyProfile(userId);
+
+      res.status(200).json({
+        message: 'Profile published successfully.',
+        profile,
+      });
+    } catch (error) {
+      if (error instanceof IncompleteOnboardingError) {
+        res.status(422).json({
+          error: error.message,
+          missingFields: error.missingFields,
+        });
+        return;
+      }
+
+      if (
+        error instanceof PublicationNotReadyError ||
+        error instanceof OnboardingNotCompletedError ||
+        error instanceof ProfileConflictError
+      ) {
+        res.status(409).json({
+          error: error.message,
+        });
+        return;
+      }
+
+      next(error);
+    }
+  },
+);
+
+// POST /api/freelancer/profile/unpublish
+profileRouter.post(
+  '/profile/unpublish',
+  requireCsrf,
+  async (_req, res, next) => {
+    try {
+      const userId = res.locals.authUser.id as string;
+
+      const profile = await unpublishMyProfile(userId);
+
+      res.status(200).json({
+        message: 'Profile is now private.',
+        profile,
+      });
+    } catch (error) {
+      if (
+        error instanceof PublicationNotReadyError ||
+        error instanceof ProfileConflictError
+      ) {
+        res.status(409).json({
+          error: error.message,
+        });
+        return;
+      }
+
+      next(error);
+    }
+  },
+);
+
