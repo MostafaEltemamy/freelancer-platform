@@ -87,17 +87,6 @@ const destination =
           </div>
         )}
 
-        
-        <p className="auth-description">
-          Access your profile, portfolio, and workspace.
-        </p>
-
-        {registrationSuccess && (
-          <div className="form-alert form-alert--success" role="status">
-            Account created successfully. Please sign in.
-          </div>
-        )}
-
         {/* Add the logout confirmation here */}
         {loggedOut && (
           <div className="form-alert form-alert--success" role="status">
@@ -105,11 +94,6 @@ const destination =
           </div>
         )}
 
-        <form className="auth-form" onSubmit={handleSubmit}>
-          {/* Keep your existing email, password, and submit fields here */}
-        </form>
-
-        
         <form className="auth-form" onSubmit={handleSubmit}>
           <div className="form-field">
             <label htmlFor="login-email">Email address</label>
