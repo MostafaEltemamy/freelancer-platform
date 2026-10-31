@@ -85,6 +85,77 @@ model FreelancerProfile {
   // Ownership
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // Portfolio and professional skills
+  projects PortfolioProject[]
+  skills   ProfileSkill[]
+
   @@index([status, publishedAt])
   @@map("freelancer_profiles")
+}
+
+enum PortfolioProjectVisibility {
+  PRIVATE
+  PUBLIC
+}
+
+model PortfolioProject {
+  id        String @id @default(uuid()) @db.Uuid
+  profileId String @map("profile_id") @db.Uuid
+
+  // Project identity
+  slug        String  @db.VarChar(80)
+  title       String  @db.VarChar(160)
+  summary     String? @db.VarChar(500)
+  description String? @db.Text
+  role        String? @db.VarChar(120)
+
+  // External links
+  projectUrl String? @map("project_url") @db.VarChar(2048)
+  sourceUrl  String? @map("source_url") @db.VarChar(2048)
+
+  // Project-specific technology stack
+  technologies String[] @default([])
+
+  // Optional project dates
+  startedOn DateTime? @map("started_on") @db.Date
+  endedOn   DateTime? @map("ended_on") @db.Date
+
+  // Publication and presentation
+  visibility PortfolioProjectVisibility @default(PRIVATE)
+  sortOrder  Int                        @default(0) @map("sort_order")
+  isFeatured Boolean                    @default(false) @map("is_featured")
+
+  // Audit timestamps
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  // Ownership
+  profile FreelancerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, slug])
+  @@index([profileId, visibility, sortOrder])
+  @@map("portfolio_projects")
+}
+
+model ProfileSkill {
+  id        String @id @default(uuid()) @db.Uuid
+  profileId String @map("profile_id") @db.Uuid
+
+  // Display name and uniqueness key
+  name           String @db.VarChar(80)
+  normalizedName String @map("normalized_name") @db.VarChar(80)
+
+  // User-defined display order
+  sortOrder Int @default(0) @map("sort_order")
+
+  // Audit timestamps
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  // Ownership
+  profile FreelancerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, normalizedName])
+  @@index([profileId, sortOrder])
+  @@map("profile_skills")
 }
