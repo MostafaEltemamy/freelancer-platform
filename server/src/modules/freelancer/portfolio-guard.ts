@@ -1,5 +1,6 @@
 import { Prisma } from '../../generated/prisma/client.js';
-import { prisma } from '../../database/prisma.js';
+
+import { withLockedProfile } from './profile-lock.js';
 
 export class PortfolioSetupRequiredError extends Error {
   constructor() {
@@ -17,33 +18,18 @@ export class PortfolioPublishedError extends Error {
   }
 }
 
-type LockedProfile = {
-  id: string;
-  username: string | null;
-  status: 'DRAFT' | 'PUBLISHED';
-};
-
-// All portfolio mutations use this transaction.
-// Locking the parent row synchronizes portfolio writes
-// with the existing profile publication workflow.
-export async function withEditablePortfolio<T>(
+// All project and skill modifications use the same
+// profile-level lock as publication.
+export function withEditablePortfolio<T>(
   userId: string,
   work: (
     tx: Prisma.TransactionClient,
     profileId: string,
   ) => Promise<T>,
 ): Promise<T> {
-  return prisma.$transaction(
-    async (tx) => {
-      const rows = await tx.$queryRaw<LockedProfile[]>`
-        SELECT id, username, status::text AS status
-        FROM freelancer_profiles
-        WHERE user_id = ${userId}::uuid
-        FOR UPDATE
-      `;
-
-      const profile = rows[0];
-
+  return withLockedProfile(
+    userId,
+    async (tx, profile) => {
       if (!profile?.username) {
         throw new PortfolioSetupRequiredError();
       }
@@ -54,9 +40,8 @@ export async function withEditablePortfolio<T>(
 
       const result = await work(tx, profile.id);
 
-      // Make the parent profile require validation again.
-      // Updating its version also invalidates a competing
-      // publication operation that read an older version.
+      // Every successful portfolio mutation invalidates
+      // the previous onboarding confirmation.
       await tx.freelancerProfile.update({
         where: { id: profile.id },
         data: {
@@ -66,10 +51,6 @@ export async function withEditablePortfolio<T>(
       });
 
       return result;
-    },
-    {
-      maxWait: 5000,
-      timeout: 15000,
     },
   );
 }

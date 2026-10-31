@@ -27,7 +27,8 @@
     "test:portfolio-schema": "tsx --test tests/portfolio-schema.test.ts",
     "test:projects": "tsx --test tests/portfolio-project-api.test.ts",
     "test:skills": "tsx --test tests/portfolio-skill-api.test.ts",
-    "test:public-portfolio": "tsx --test tests/public-portfolio-api.test.ts"
+    "test:public-portfolio": "tsx --test tests/public-portfolio-api.test.ts",
+    "test:concurrency": "tsx --test tests/portfolio-concurrency-api.test.ts"
   },
   "keywords": [],
   "type": "module",

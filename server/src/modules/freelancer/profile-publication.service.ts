@@ -1,12 +1,14 @@
-import { prisma } from '../../database/prisma.js';
+import type { Prisma } from '../../generated/prisma/client.js';
 
 import {
-  getMyProfile,
+  PROFILE_SELECT,
   IncompleteOnboardingError,
   ProfileConflictError,
 } from './profile.service.js';
 
-import {getMissingProfileFields} from './profile.requirements.js';
+import { getMissingProfileFields } from './profile.requirements.js';
+
+import { withLockedProfile } from './profile-lock.js';
 
 export class PublicationNotReadyError extends Error {
   constructor() {
@@ -22,130 +24,97 @@ export class OnboardingNotCompletedError extends Error {
   }
 }
 
-// Publish only a valid, completed draft owned by this user.
-export async function publishMyProfile(userId: string) {
-  const profile = await prisma.freelancerProfile.findUnique({
-    where: { userId },
-    select: {
-      id: true,
-      userId: true,
-      username: true,
-      headline: true,
-      bio: true,
-      countryCode: true,
-      status: true,
-      onboardingCompletedAt: true,
-      publishedAt: true,
-      updatedAt: true,
-    },
+// Return the authoritative profile state from inside
+// the same transaction that performed the operation.
+function readProfile(
+  tx: Prisma.TransactionClient,
+  profileId: string,
+) {
+  return tx.freelancerProfile.findUniqueOrThrow({
+    where: { id: profileId },
+    select: PROFILE_SELECT,
   });
-
-  if (!profile?.username) {
-    throw new PublicationNotReadyError();
-  }
-
-  // Repeating a successful publication is harmless.
-  if (profile.status === 'PUBLISHED') {
-    if (
-      profile.publishedAt &&
-      profile.onboardingCompletedAt
-    ) {
-      return getMyProfile(userId);
-    }
-
-    throw new ProfileConflictError();
-  }
-
-  if (profile.status !== 'DRAFT') {
-    throw new ProfileConflictError();
-  }
-
-  const missingFields = getMissingProfileFields(profile);
-
-  if (missingFields.length > 0) {
-    throw new IncompleteOnboardingError(missingFields);
-  }
-
-  if (!profile.onboardingCompletedAt) {
-    throw new OnboardingNotCompletedError();
-  }
-
-  // Compare the validated values with the current row.
-  // A concurrent edit must not publish stale information.
-  const updated = await prisma.freelancerProfile.updateMany({
-    where: {
-      id: profile.id,
-      userId,
-      status: 'DRAFT',
-      username: profile.username,
-      headline: profile.headline,
-      bio: profile.bio,
-      countryCode: profile.countryCode,
-      onboardingCompletedAt: profile.onboardingCompletedAt,
-      updatedAt: profile.updatedAt,
-    },
-    data: {
-      status: 'PUBLISHED',
-      publishedAt: new Date(),
-    },
-  });
-
-  if (updated.count !== 1) {
-    throw new ProfileConflictError();
-  }
-
-  return getMyProfile(userId);
 }
 
-// Unpublish an existing public profile.
-// The profile data and completed onboarding are retained.
-export async function unpublishMyProfile(userId: string) {
-  const profile = await prisma.freelancerProfile.findUnique({
-    where: { userId },
-    select: {
-      id: true,
-      status: true,
-      publishedAt: true,
-      updatedAt: true,
-    },
+// Publish only a validated draft owned by this user.
+export function publishMyProfile(userId: string) {
+  return withLockedProfile(userId, async (tx, profile) => {
+    if (!profile?.username) {
+      throw new PublicationNotReadyError();
+    }
+
+    // Idempotency: an already-published profile stays
+    // published without changing the publication date.
+    if (profile.status === 'PUBLISHED') {
+      if (
+        !profile.publishedAt ||
+        !profile.onboardingCompletedAt
+      ) {
+        throw new ProfileConflictError();
+      }
+
+      return readProfile(tx, profile.id);
+    }
+
+    if (profile.status !== 'DRAFT') {
+      throw new ProfileConflictError();
+    }
+
+    const missingFields = getMissingProfileFields(profile);
+
+    if (missingFields.length > 0) {
+      throw new IncompleteOnboardingError(missingFields);
+    }
+
+    if (!profile.onboardingCompletedAt) {
+      throw new OnboardingNotCompletedError();
+    }
+
+    // The profile is locked. A competing portfolio
+    // modification cannot invalidate it while we publish.
+    await tx.freelancerProfile.update({
+      where: { id: profile.id },
+      data: {
+        status: 'PUBLISHED',
+        publishedAt: new Date(),
+      },
+    });
+
+    return readProfile(tx, profile.id);
   });
+}
 
-  if (!profile) {
-    throw new PublicationNotReadyError();
-  }
+// Unpublish and immediately make the profile private
+// for subsequent public API requests.
+export function unpublishMyProfile(userId: string) {
+  return withLockedProfile(userId, async (tx, profile) => {
+    if (!profile) {
+      throw new PublicationNotReadyError();
+    }
 
-  // Already private: leave it unchanged.
-  if (
-    profile.status === 'DRAFT' &&
-    profile.publishedAt === null
-  ) {
-    return getMyProfile(userId);
-  }
+    // Idempotency: already private.
+    if (
+      profile.status === 'DRAFT' &&
+      profile.publishedAt === null
+    ) {
+      return readProfile(tx, profile.id);
+    }
 
-  if (
-    profile.status !== 'PUBLISHED' ||
-    !profile.publishedAt
-  ) {
-    throw new ProfileConflictError();
-  }
+    if (
+      profile.status !== 'PUBLISHED' ||
+      !profile.publishedAt
+    ) {
+      throw new ProfileConflictError();
+    }
 
-  const updated = await prisma.freelancerProfile.updateMany({
-    where: {
-      id: profile.id,
-      userId,
-      status: 'PUBLISHED',
-      publishedAt: profile.publishedAt,
-      updatedAt: profile.updatedAt,
-    },
-    data: {
-      status: 'DRAFT',
-      publishedAt: null,
-    },
+    await tx.freelancerProfile.update({
+      where: { id: profile.id },
+      data: {
+        status: 'DRAFT',
+        publishedAt: null,
+      },
+    });
+
+    return readProfile(tx, profile.id);
   });
-
-  if (updated.count !== 1) {
-    throw new ProfileConflictError();
-  }
-
-  return getMyProfile(userId);
 }

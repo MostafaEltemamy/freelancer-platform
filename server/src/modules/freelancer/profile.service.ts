@@ -2,7 +2,7 @@ import { prisma } from '../../database/prisma.js';
 import type { SaveProfileInput } from './profile.schemas.js';
 import { getMissingProfileFields } from './profile.requirements.js';
 
-const PROFILE_SELECT = {
+export const PROFILE_SELECT = {
   id: true,
   username: true,
   headline: true,
