@@ -1,6 +1,4 @@
-
 import { beforeEach, expect, test, vi } from 'vitest';
-
 
 import * as matchers from '@testing-library/jest-dom/matchers';
 import '@testing-library/jest-dom/vitest';
@@ -9,6 +7,7 @@ import '@testing-library/jest-dom/vitest';
 expect.extend(matchers);
 
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -310,4 +309,67 @@ test('does not claim logout succeeded when it fails', async () => {
       name: 'Welcome, Test Freelancer',
     }),
   ).toBeInTheDocument();
+});
+
+// Test 9
+test('preserves unsaved form data when browser regains focus', async () => {
+  let finishRecheck: (user: AuthUser) => void = () => {};
+
+  const pendingRecheck = new Promise<AuthUser>((resolve) => {
+    finishRecheck = resolve;
+  });
+
+  vi.mocked(authApi.me)
+    .mockResolvedValueOnce(testUser)
+    .mockImplementationOnce(() => pendingRecheck);
+
+  render(
+    <AuthProvider>
+      <MemoryRouter initialEntries={['/draft']}>
+        <Routes>
+          <Route path="/draft" element={<ProtectedRoute />}>
+            <Route
+              index
+              element={
+                <input aria-label="Unsaved project title" />
+              }
+            />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    </AuthProvider>,
+  );
+
+  const input = await screen.findByRole('textbox', {
+    name: 'Unsaved project title',
+  });
+
+  fireEvent.change(input, {
+    target: { value: 'My unfinished portfolio project' },
+  });
+
+  // Simulate returning to the browser.
+  fireEvent.focus(window);
+
+  expect(authApi.me).toHaveBeenCalledTimes(2);
+
+  // The same input must remain mounted while the
+  // authentication request is still pending.
+  expect(
+    screen.getByRole('textbox', {
+      name: 'Unsaved project title',
+    }),
+  ).toBe(input);
+
+  expect(input).toHaveValue(
+    'My unfinished portfolio project',
+  );
+
+  await act(async () => {
+    finishRecheck(testUser);
+  });
+
+  expect(input).toHaveValue(
+    'My unfinished portfolio project',
+  );
 });

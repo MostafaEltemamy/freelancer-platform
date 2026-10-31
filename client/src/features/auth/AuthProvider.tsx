@@ -105,14 +105,26 @@ export function AuthProvider({
     };
   }, []);
 
-  // Recheck authentication with the backend.
+
+  // Recheck authentication without unnecessarily
+  // unmounting an already authenticated page.
   const refresh = useCallback(async () => {
     const version = ++requestVersion.current;
 
-    setState({
-      user: null,
-      status: 'loading',
-      error: null,
+    setState((current) => {
+      // Preserve the currently mounted page while
+      // silently revalidating an authenticated session.
+      if (current.status === 'authenticated') {
+        return current;
+      }
+
+      // Initial recovery and manual retry still
+      // display the loading state.
+      return {
+        user: null,
+        status: 'loading',
+        error: null,
+      };
     });
 
     try {
