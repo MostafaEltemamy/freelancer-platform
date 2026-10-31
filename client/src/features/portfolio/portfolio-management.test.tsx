@@ -56,6 +56,7 @@ const draftProfile: FreelancerProfile = {
 
 const project: PortfolioProject = {
   id: '11111111-1111-4111-8111-111111111111',
+  version: 1,
   slug: 'research-dashboard',
   title: 'Research Dashboard',
   summary: 'A scientific data dashboard',
@@ -205,6 +206,7 @@ test('requires confirmation before deleting projects', async () => {
 
   expect(portfolioApi.deleteProject).toHaveBeenCalledWith(
     project.id,
+    project.version,
   );
 });
 
@@ -240,8 +242,8 @@ test('reorders projects using their IDs', async () => {
   ).toBeInTheDocument();
 
   expect(portfolioApi.reorderProjects).toHaveBeenCalledWith([
-    second.id,
-    project.id,
+    { id: second.id, version: second.version },
+    { id: project.id, version: project.version },
   ]);
 });
 
@@ -380,5 +382,62 @@ test('shows API errors without claiming success', async () => {
 
   expect(
     screen.queryByText('Skill added successfully.'),
+  ).not.toBeInTheDocument();
+});
+
+test('preserves unsaved project changes after a version conflict', async () => {
+  vi.mocked(portfolioApi.listProjects).mockResolvedValue({
+    projects: [project],
+  });
+
+  vi.mocked(portfolioApi.updateProject).mockRejectedValue(
+    new ApiError(
+      'This project has changed since you opened it.',
+      409,
+    ),
+  );
+
+  renderPortfolio();
+
+  await screen.findByText('Research Dashboard');
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Edit Research Dashboard',
+    }),
+  );
+
+  const titleInput = screen.getByLabelText('Project title');
+
+  fireEvent.change(titleInput, {
+    target: { value: 'My unsaved project changes' },
+  });
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Save project',
+    }),
+  );
+
+  expect(
+    await screen.findByRole('alert'),
+  ).toHaveTextContent(
+    'This project has changed since you opened it.',
+  );
+
+  expect(titleInput).toHaveValue(
+    'My unsaved project changes',
+  );
+
+  expect(portfolioApi.updateProject).toHaveBeenCalledWith(
+    project.id,
+    expect.objectContaining({
+      title: 'My unsaved project changes',
+    }),
+    1,
+  );
+
+  expect(
+    screen.queryByText('Project updated successfully.'),
   ).not.toBeInTheDocument();
 });

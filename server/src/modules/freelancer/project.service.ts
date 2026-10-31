@@ -29,6 +29,7 @@ const PROJECT_SELECT = {
   isFeatured: true,
   createdAt: true,
   updatedAt: true,
+  version: true,
 } as const;
 
 export class ProjectNotFoundError extends Error {
@@ -59,6 +60,15 @@ export class ProjectDateRangeError extends Error {
   }
 }
 
+export class ProjectVersionConflictError extends Error {
+  constructor() {
+    super(
+      'This project has changed since you opened it. Reload the latest version before saving.',
+    );
+    this.name = 'ProjectVersionConflictError';
+  }
+}
+
 function toDate(
   value: string | null | undefined,
 ): Date | null | undefined {
@@ -81,9 +91,9 @@ function assertValidDateRange(
   }
 }
 
-function projectData<
-  T extends CreateProjectInput | UpdateProjectInput
->(input: T) {
+function projectData <T extends Partial<CreateProjectInput>>(
+  input: T,
+) {
   return {
     ...input,
     startedOn: toDate(input.startedOn),
@@ -146,17 +156,20 @@ export async function updateMyProject(
 ) {
   return withEditablePortfolio(userId, async (tx, profileId) => {
     const existing = await tx.portfolioProject.findFirst({
-      where: {
-        id: projectId,
-        profileId,
-      },
+      where: { id: projectId, profileId },
     });
 
     if (!existing) {
       throw new ProjectNotFoundError();
     }
 
-    const data = projectData(input);
+    if (existing.version !== input.version) {
+      throw new ProjectVersionConflictError();
+    }
+
+    // The client version must never be written as ordinary data.
+    const { version, ...changes } = input;
+    const data = projectData(changes);
 
     const startedOn =
       data.startedOn === undefined
@@ -170,9 +183,24 @@ export async function updateMyProject(
 
     assertValidDateRange(startedOn, endedOn);
 
-    return tx.portfolioProject.update({
-      where: { id: existing.id },
-      data,
+    const result = await tx.portfolioProject.updateMany({
+      where: {
+        id: projectId,
+        profileId,
+        version,
+      },
+      data: {
+        ...data,
+        version: { increment: 1 },
+      },
+    });
+
+    if (result.count !== 1) {
+      throw new ProjectVersionConflictError();
+    }
+
+    return tx.portfolioProject.findUniqueOrThrow({
+      where: { id: projectId },
       select: PROJECT_SELECT,
     });
   });
@@ -181,22 +209,38 @@ export async function updateMyProject(
 export async function deleteMyProject(
   userId: string,
   projectId: string,
+  expectedVersion: number,
 ) {
   return withEditablePortfolio(userId, async (tx, profileId) => {
+    const existing = await tx.portfolioProject.findFirst({
+      where: { id: projectId, profileId },
+      select: { version: true },
+    });
+
+    if (!existing) {
+      throw new ProjectNotFoundError();
+    }
+
+    if (existing.version !== expectedVersion) {
+      throw new ProjectVersionConflictError();
+    }
+
     const deleted = await tx.portfolioProject.deleteMany({
       where: {
         id: projectId,
         profileId,
+        version: expectedVersion,
       },
     });
 
     if (deleted.count !== 1) {
-      throw new ProjectNotFoundError();
+      throw new ProjectVersionConflictError();
     }
 
     return { id: projectId };
   });
 }
+
 
 export async function reorderMyProjects(
   userId: string,
@@ -205,24 +249,51 @@ export async function reorderMyProjects(
   return withEditablePortfolio(userId, async (tx, profileId) => {
     const existing = await tx.portfolioProject.findMany({
       where: { profileId },
-      select: { id: true },
+      select: {
+        id: true,
+        version: true,
+      },
     });
 
-    const expected = new Set(existing.map((item) => item.id));
+    const current = new Map(
+      existing.map((project) => [project.id, project.version]),
+    );
 
     if (
-      expected.size !== input.ids.length ||
-      input.ids.some((id) => !expected.has(id))
+      existing.length !== input.items.length ||
+      input.items.some((item) => !current.has(item.id))
     ) {
       throw new ProjectOrderError();
     }
 
-    // All updates commit together or roll back together.
-    for (let index = 0; index < input.ids.length; index++) {
-      await tx.portfolioProject.update({
-        where: { id: input.ids[index]! },
-        data: { sortOrder: index },
+    if (
+      input.items.some(
+        (item) => current.get(item.id) !== item.version,
+      )
+    ) {
+      throw new ProjectVersionConflictError();
+    }
+
+    // All changes are part of the same transaction.
+    // Every reordered record advances its version.
+    for (let index = 0; index < input.items.length; index++) {
+      const item = input.items[index]!;
+
+      const result = await tx.portfolioProject.updateMany({
+        where: {
+          id: item.id,
+          profileId,
+          version: item.version,
+        },
+        data: {
+          sortOrder: index,
+          version: { increment: 1 },
+        },
       });
+
+      if (result.count !== 1) {
+        throw new ProjectVersionConflictError();
+      }
     }
 
     return tx.portfolioProject.findMany({

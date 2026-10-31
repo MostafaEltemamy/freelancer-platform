@@ -1,14 +1,14 @@
 import { useState } from 'react';
-
 import type { PortfolioProject } from './portfolio.types';
+import type { VersionedRecord } from './portfolio.types';
 
 interface Props {
   projects: PortfolioProject[];
   canEdit: boolean;
   busy: boolean;
   onEdit: (project: PortfolioProject) => void;
-  onDelete: (id: string) => Promise<boolean>;
-  onReorder: (ids: string[]) => Promise<boolean>;
+  onDelete: (id: string, version: number) => Promise<boolean>;
+  onReorder: (items: VersionedRecord[]) => Promise<boolean>;
 }
 
 export function ProjectList({
@@ -24,20 +24,28 @@ export function ProjectList({
 
   function move(index: number, direction: -1 | 1) {
     if (!canEdit || busy) return;
-
     const target = index + direction;
+    if (target < 0 || target >= projects.length) return;    
+    const items: VersionedRecord[] = projects.map(
+      (project) => ({
+        id: project.id,
+        version: project.version,
+      }),
+    );
 
-    if (target < 0 || target >= projects.length) return;
+    [items[index], items[target]] = [
+      items[target]!,
+      items[index]!,
+    ];
 
-    const ids = projects.map((project) => project.id);
-
-    [ids[index], ids[target]] = [ids[target]!, ids[index]!];
-
-    void onReorder(ids);
+    void onReorder(items);
   }
 
-  async function remove(id: string) {
-    const success = await onDelete(id);
+  async function remove(project: PortfolioProject) {
+    const success = await onDelete(
+      project.id,
+      project.version,
+    );
 
     if (success) {
       setConfirmDeleteId(null);
@@ -142,7 +150,7 @@ export function ProjectList({
                   type="button"
                   className="primary-button"
                   disabled={busy}
-                  onClick={() => void remove(project.id)}
+                  onClick={() => void remove(project)}
                 >
                   Confirm delete {project.title}
                 </button>

@@ -22,6 +22,13 @@ export interface PortfolioProject {
 
   createdAt: string;
   updatedAt: string;
+
+  version: number;
+}
+
+export interface VersionedRecord {
+  id: string;
+  version: number;
 }
 
 export interface CreateProjectInput {
@@ -43,6 +50,11 @@ export interface CreateProjectInput {
   visibility?: ProjectVisibility;
   sortOrder?: number;
   isFeatured?: boolean;
+}
+
+export interface VersionedRecord {
+  id: string;
+  version: number;
 }
 
 export type UpdateProjectInput = Partial<CreateProjectInput>;

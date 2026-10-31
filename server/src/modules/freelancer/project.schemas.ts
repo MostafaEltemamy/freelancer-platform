@@ -79,18 +79,39 @@ export const createProjectSchema = z.strictObject({
   isFeatured: z.boolean().optional(),
 });
 
+export const projectVersionSchema = z.number()
+  .int()
+  .min(1)
+  .max(2_147_483_646);
+
 export const updateProjectSchema =
-  createProjectSchema.partial().refine(
-    (data) => Object.keys(data).length > 0,
-    'Provide at least one field to update.',
-  );
+  createProjectSchema.partial()
+    .extend({
+      version: projectVersionSchema,
+    })
+    .refine(
+      (data) =>
+        Object.keys(data).some((key) => key !== 'version'),
+      'Provide at least one project field to update.',
+    );
+
+export const deleteProjectSchema = z.strictObject({
+  version: projectVersionSchema,
+});
 
 export const reorderProjectsSchema = z.strictObject({
-  ids: z.array(projectIdSchema)
+  items: z.array(
+    z.strictObject({
+      id: projectIdSchema,
+      version: projectVersionSchema,
+    }),
+  )
     .min(1)
     .max(100)
     .refine(
-      (ids) => new Set(ids).size === ids.length,
+      (items) =>
+        new Set(items.map((item) => item.id)).size ===
+        items.length,
       'Project IDs must not contain duplicates.',
     ),
 });

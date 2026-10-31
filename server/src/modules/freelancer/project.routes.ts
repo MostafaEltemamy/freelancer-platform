@@ -16,6 +16,7 @@ import {
 import {
   createProjectSchema,
   updateProjectSchema,
+  deleteProjectSchema,
   reorderProjectsSchema,
   projectIdSchema,
 } from './project.schemas.js';
@@ -30,6 +31,7 @@ import {
   ProjectLimitError,
   ProjectDateRangeError,
   ProjectOrderError,
+  ProjectVersionConflictError
 } from './project.service.js';
 
 export const projectRouter = Router();
@@ -74,6 +76,14 @@ function handleError(
   ) {
     res.status(409).json({
       error: 'A project with this slug already exists.',
+    });
+    return;
+  }
+
+  if (error instanceof ProjectVersionConflictError) {
+    res.status(409).json({
+      error: error.message,
+      code: 'STALE_VERSION',
     });
     return;
   }
@@ -189,17 +199,27 @@ projectRouter.patch(
   },
 );
 
-// DELETE /api/freelancer/projects/:id
+/**
+ * DELETE /api/freelancer/projects/:id
+ *
+ * Requires:
+ * - Authenticated session
+ * - Valid CSRF token
+ * - Project ownership
+ * - Current project version
+ */
+
 projectRouter.delete(
   '/projects/:id',
   requireCsrf,
   mutationLimiter,
-  async (req, res, next) => {
+    async (req, res, next) => {
     const id = projectIdSchema.safeParse(req.params.id);
+    const input = deleteProjectSchema.safeParse(req.body);
 
-    if (!id.success) {
+    if (!id.success || !input.success) {
       res.status(400).json({
-        error: 'Invalid project ID.',
+        error: 'A valid project ID and current version are required.',
       });
       return;
     }
@@ -208,11 +228,12 @@ projectRouter.delete(
       await deleteMyProject(
         res.locals.authUser.id as string,
         id.data,
+        input.data.version,
       );
 
       res.status(204).end();
     } catch (error) {
       handleError(error, res, next);
     }
-  },
+  }
 );

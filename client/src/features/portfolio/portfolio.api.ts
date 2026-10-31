@@ -10,6 +10,7 @@ import type {
   SkillResponse,
   SkillInput,
   ReorderInput,
+  VersionedRecord,
 } from './portfolio.types';
 
 const PROJECTS_PATH = '/api/freelancer/projects';
@@ -41,30 +42,33 @@ export const portfolioApi = {
   updateProject(
     id: string,
     input: UpdateProjectInput,
+    version: number,
   ): Promise<ProjectResponse> {
     return protectedWrite<ProjectResponse>(
       itemPath(PROJECTS_PATH, id),
       'PATCH',
-      input,
+      { ...input, version },
     );
   },
 
-  async deleteProject(id: string): Promise<void> {
+  async deleteProject(
+    id: string,
+    version: number,
+  ): Promise<void> {
     await protectedWrite<void>(
       itemPath(PROJECTS_PATH, id),
       'DELETE',
+      { version },
     );
   },
 
   reorderProjects(
-    ids: string[],
+    items: VersionedRecord[],
   ): Promise<ProjectsResponse> {
-    const input: ReorderInput = { ids };
-
     return protectedWrite<ProjectsResponse>(
       `${PROJECTS_PATH}/order`,
       'PUT',
-      input,
+      { items },
     );
   },
 

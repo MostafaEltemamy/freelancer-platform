@@ -126,7 +126,11 @@ export function PortfolioManagementPage() {
   ): Promise<boolean> {
     const saved = await perform(
       () => editing
-        ? portfolioApi.updateProject(editing.id, input)
+        ? portfolioApi.updateProject(
+            editing.id,
+            input,
+            editing.version,
+          )
         : portfolioApi.createProject(input),
       editing ? 'Project updated successfully.' : 'Project created successfully.',
     );
@@ -265,15 +269,15 @@ export function PortfolioManagementPage() {
               setEditing(project);
               setError(null);
             }}
-            onDelete={(id) =>
+            onDelete={(id, version) =>
               perform(
-                () => portfolioApi.deleteProject(id),
+                () => portfolioApi.deleteProject(id, version),
                 'Project deleted successfully.',
               )
             }
-            onReorder={(ids) =>
+            onReorder={(items) =>
               perform(
-                () => portfolioApi.reorderProjects(ids),
+                () => portfolioApi.reorderProjects(items),
                 'Project order updated.',
               )
             }
