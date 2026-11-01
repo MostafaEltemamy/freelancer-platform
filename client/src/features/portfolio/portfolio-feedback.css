@@ -1,0 +1,71 @@
+.portfolio-feedback {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin: 20px 0;
+  padding: 18px 20px;
+  border: 1px solid #fecaca;
+  border-radius: 14px;
+  background: #fff7f7;
+  color: #7f1d1d;
+}
+
+.portfolio-feedback-icon {
+  display: grid;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-weight: 800;
+}
+
+.portfolio-feedback-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.portfolio-feedback-content strong {
+  display: block;
+  font-size: 0.96rem;
+}
+
+.portfolio-feedback-content p {
+  margin: 6px 0 0;
+  color: #991b1b;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.portfolio-feedback-dismiss {
+  display: grid;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #991b1b;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.portfolio-feedback-dismiss:hover {
+  background: #fee2e2;
+}
+
+.portfolio-feedback-dismiss:focus-visible {
+  outline: 3px solid #dc2626;
+  outline-offset: 2px;
+}
+
+@media (max-width: 600px) {
+  .portfolio-feedback {
+    gap: 10px;
+    padding: 14px;
+  }
+}

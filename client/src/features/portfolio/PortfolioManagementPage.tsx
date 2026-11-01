@@ -6,12 +6,17 @@ import { profileApi } from '../profile/profile.api';
 import { ProjectEditor } from './ProjectEditor';
 import { ProjectList } from './ProjectList';
 import { SkillManager } from './SkillManager';
+import './portfolio-feedback.css';
+
 import type { FreelancerProfile } from '../onboarding/onboarding.types';
+
 import type {
   CreateProjectInput,
   PortfolioProject,
+  PortfolioProjectDetail,
   PortfolioSkill,
 } from './portfolio.types';
+
 
 function getError(error: unknown): string {
   return error instanceof Error
@@ -37,7 +42,10 @@ export function PortfolioManagementPage() {
 
   // undefined = editor closed; null = new project.
   const [editing, setEditing] =
-    useState<PortfolioProject | null | undefined>(undefined);
+    useState<PortfolioProjectDetail | null | undefined>(undefined);
+
+  const [openingProjectId, setOpeningProjectId] =
+    useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -91,7 +99,7 @@ export function PortfolioManagementPage() {
   }, []);
 
   async function reload() {
-    if (busy) return;
+    if (busy || openingProjectId !== null) return;
 
     setBusy(true);
 
@@ -161,6 +169,32 @@ export function PortfolioManagementPage() {
       return false;
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function openProject(
+    project: PortfolioProject,
+  ): Promise<void> {
+    if (busy || openingProjectId !== null) {
+      return;
+    }
+
+    setOpeningProjectId(project.id);
+    setError(null);
+    setNotice(null);
+    setHasVersionConflict(false);
+
+    try {
+      // Always load the complete authoritative record.
+      // The list intentionally contains no custom JSON.
+      const result = await portfolioApi.getProject(project.id);
+
+      setEditing(result.project);
+    } catch (err) {
+      // Do not open an empty editor after a failed fetch.
+      setError(getError(err));
+    } finally {
+      setOpeningProjectId(null);
     }
   }
 
@@ -272,8 +306,30 @@ export function PortfolioManagementPage() {
         </section>
 
         {error && (
-          <div role="alert" className="form-alert form-alert--error">
-            {error}
+          <div
+            className="portfolio-feedback portfolio-feedback--error"
+            role="alert"
+          >
+            <span
+              className="portfolio-feedback-icon"
+              aria-hidden="true"
+            >
+              !
+            </span>
+
+            <div className="portfolio-feedback-content">
+              <strong>We couldn't complete that action</strong>
+              <p>{error}</p>
+            </div>
+
+            <button
+              type="button"
+              className="portfolio-feedback-dismiss"
+              aria-label="Dismiss error"
+              onClick={() => setError(null)}
+            >
+              ×
+            </button>
           </div>
         )}
 
@@ -338,15 +394,17 @@ export function PortfolioManagementPage() {
             )}
           </div>
 
+          {openingProjectId !== null && (
+            <p role="status" className="profile-help">
+              Loading project details…
+            </p>
+          )}
+
           <ProjectList
             projects={projects}
             canEdit={canEdit}
-            busy={busy}
-            onEdit={(project) => {
-              setEditing(project);
-              setError(null);
-              setHasVersionConflict(false);
-            }}
+            busy={busy || openingProjectId !== null}
+            onEdit={(project) => {void openProject(project);}}
             onDelete={(id, version) =>
               perform(
                 () => portfolioApi.deleteProject(id, version),

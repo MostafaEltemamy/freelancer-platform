@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
+import { ProjectContentBuilder } from './ProjectContentBuilder';
+import { cleanProjectContent } from './project-content.utils';
+import type {ProjectContent} from './portfolio.types';
 
 import type {
   CreateProjectInput,
-  PortfolioProject,
+  PortfolioProjectDetail,
   ProjectVisibility,
 } from './portfolio.types';
 
 interface Props {
-  project: PortfolioProject | null;
+  project: PortfolioProjectDetail | null;
   busy: boolean;
   onSave: (input: CreateProjectInput) => Promise<boolean>;
   onCancel: () => void;
@@ -29,7 +32,7 @@ interface FormData {
   isFeatured: boolean;
 }
 
-function initialForm(project: PortfolioProject | null): FormData {
+function initialForm(project: PortfolioProjectDetail | null): FormData {
   return {
     slug: project?.slug ?? '',
     title: project?.title ?? '',
@@ -54,6 +57,13 @@ export function ProjectEditor({
 }: Props) {
   const [form, setForm] = useState<FormData>(() => initialForm(project));
   const [error, setError] = useState<string | null>(null);
+
+  const [content, setContent] = useState<ProjectContent>(
+    () => project?.content ?? {
+      schemaVersion: 1,
+      sections: [],
+    },
+  );
 
   function update<K extends keyof FormData>(
     field: K,
@@ -105,11 +115,27 @@ export function ProjectEditor({
       return;
     }
 
+    const hasInvalidCustomLabels = content.sections.some(
+      (section) =>
+        !section.title.trim() ||
+        section.fields.some(
+          (field) => !field.label.trim(),
+        ),
+    );
+
+    if (hasInvalidCustomLabels) {
+      setError(
+        'Every custom section and field needs a name.',
+      );
+      return;
+    }
+
     const optional = (value: string) => value.trim() || null;
 
     const input: CreateProjectInput = {
       slug,
       title,
+      content: cleanProjectContent(content),
       summary: optional(form.summary),
       description: optional(form.description),
       role: optional(form.role),
@@ -216,7 +242,7 @@ export function ProjectEditor({
             disabled={busy}
             value={form.technologies}
             onChange={(event) => update('technologies', event.target.value)}
-            placeholder="React, TypeScript, PostgreSQL"
+            placeholder="Optional: React, Adobe Illustrator, Excel..."
           />
           <small>Separate technologies with commas; maximum 25.</small>
         </div>
@@ -299,6 +325,15 @@ export function ProjectEditor({
           />
           Feature this project
         </label>
+
+        <ProjectContentBuilder
+          value={content}
+          disabled={busy}
+          onChange={(nextContent) => {
+            setContent(nextContent);
+            setError(null);
+          }}
+        />
 
         <div className="onboarding-actions">
           <button

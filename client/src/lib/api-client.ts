@@ -1,4 +1,3 @@
-
 const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL ?? ''
 ).replace(/\/+$/, '');
@@ -13,26 +12,139 @@ export class ApiError extends Error {
     code?: string,
   ) {
     super(message);
+
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
   }
 }
 
-function getErrorMessage(data: unknown): string {
-  if (
-    typeof data === 'object' &&
-    data !== null &&
-    'error' in data &&
-    typeof data.error === 'string'
-  ) {
-    return data.error;
-  }
-
-  return 'Request failed. Please try again.';
+interface ValidationIssue {
+  field: string;
+  message: string;
 }
 
-function getErrorCode(data: unknown): string | undefined {
+function getValidationIssues(
+  data: Record<string, unknown>,
+): ValidationIssue[] {
+  if (!Array.isArray(data.issues)) {
+    return [];
+  }
+
+  return data.issues.flatMap((issue): ValidationIssue[] => {
+    if (
+      typeof issue !== 'object' ||
+      issue === null ||
+      !('field' in issue) ||
+      !('message' in issue) ||
+      typeof issue.field !== 'string' ||
+      typeof issue.message !== 'string'
+    ) {
+      return [];
+    }
+
+    return [{
+      field: issue.field,
+      message: issue.message,
+    }];
+  });
+}
+
+/**
+ * Translate server validation details into a message
+ * suitable for users.
+ *
+ * Internal schema paths and technical field names
+ * should not appear in the application interface.
+ */
+function getErrorMessage(data: unknown): string {
+  if (
+    typeof data !== 'object' ||
+    data === null
+  ) {
+    return 'Something went wrong. Please try again.';
+  }
+
+  const response = data as Record<string, unknown>;
+
+  const fallback =
+    typeof response.error === 'string'
+      ? response.error
+      : 'Something went wrong. Please try again.';
+
+  const issues = getValidationIssues(response);
+
+  if (issues.length === 0) {
+    return fallback;
+  }
+
+  // Unknown properties indicate a mismatch between
+  // the frontend payload and the backend schema.
+  // This is not something the user should have to fix.
+  if (
+    issues.some((issue) =>
+      issue.message.startsWith('Unrecognized key')
+    )
+  ) {
+    return (
+      "We couldn't save your changes due to an " +
+      'unexpected problem. Your edits are still here. ' +
+      'Please try again.'
+    );
+  }
+
+  if (
+    issues.some((issue) =>
+      issue.field.startsWith('content.')
+    )
+  ) {
+    return (
+      'Some custom project details need attention. ' +
+      'Please check your section names, field names, ' +
+      'and values before saving.'
+    );
+  }
+
+  if (
+    issues.some((issue) =>
+      issue.field === 'slug'
+    )
+  ) {
+    return (
+      'Please check your project link name. ' +
+      'Use lowercase letters, numbers, and hyphens.'
+    );
+  }
+
+  if (
+    issues.some((issue) =>
+      issue.field === 'title'
+    )
+  ) {
+    return (
+      'Please enter a project title between ' +
+      '3 and 160 characters.'
+    );
+  }
+
+  if (
+    issues.some((issue) =>
+      issue.field === 'startedOn' ||
+      issue.field === 'endedOn'
+    )
+  ) {
+    return 'Please check the project dates and try again.';
+  }
+
+  return (
+    'Some information needs attention. ' +
+    'Please review your entries and try again.'
+  );
+}
+
+function getErrorCode(
+  data: unknown,
+): string | undefined {
   if (
     typeof data === 'object' &&
     data !== null &&
@@ -49,7 +161,10 @@ export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
-  if (!path.startsWith('/') || path.startsWith('//')) {
+  if (
+    !path.startsWith('/') ||
+    path.startsWith('//')
+  ) {
     throw new Error('Invalid API path.');
   }
 
@@ -65,12 +180,8 @@ export async function apiRequest<T>(
       {
         ...options,
 
-        // Include browser-managed session cookies.
         credentials: 'include',
-
-        // Avoid storing authentication responses.
         cache: 'no-store',
-
         headers,
       },
     );
@@ -81,7 +192,6 @@ export async function apiRequest<T>(
     );
   }
 
-  // Successful responses without a body.
   if (response.status === 204) {
     return undefined as T;
   }
@@ -101,13 +211,29 @@ export async function apiRequest<T>(
     }
   }
 
-if (!response.ok) {
-  throw new ApiError(
-    getErrorMessage(data),
-    response.status,
-    getErrorCode(data),
-  );
-}
+  if (!response.ok) {
+    // Technical diagnostics are available only
+    // in local development.
+    if (
+      import.meta.env.DEV &&
+      response.status === 400 &&
+      typeof data === 'object' &&
+      data !== null &&
+      'issues' in data &&
+      Array.isArray(data.issues)
+    ) {
+      console.debug(
+        'API validation details:',
+        data.issues,
+      );
+    }
+
+    throw new ApiError(
+      getErrorMessage(data),
+      response.status,
+      getErrorCode(data),
+    );
+  }
 
   return data as T;
 }
