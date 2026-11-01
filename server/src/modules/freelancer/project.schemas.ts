@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import {projectContentSchema} from './project-content.schemas.js';
 
 const optionalText = (max: number) =>
   z.string()
@@ -29,9 +30,14 @@ const optionalUrl = z.string()
   .optional();
 
 const optionalDate = z.string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD.')
+  .regex(
+    /^\d{4}-\d{2}-\d{2}$/,
+    'Use YYYY-MM-DD.',
+  )
   .refine((value) => {
-    const date = new Date(`${value}T00:00:00.000Z`);
+    const date = new Date(
+      `${value}T00:00:00.000Z`,
+    );
 
     return (
       !Number.isNaN(date.getTime()) &&
@@ -47,8 +53,9 @@ const technologiesSchema = z.array(
   .max(25)
   .refine(
     (values) =>
-      new Set(values.map((value) => value.toLowerCase()))
-        .size === values.length,
+      new Set(
+        values.map((value) => value.toLowerCase()),
+      ).size === values.length,
     'Technologies must not contain duplicates.',
   );
 
@@ -69,14 +76,32 @@ export const createProjectSchema = z.strictObject({
   summary: optionalText(500),
   description: optionalText(10000),
   role: optionalText(120),
+
   projectUrl: optionalUrl,
   sourceUrl: optionalUrl,
+
   technologies: technologiesSchema.optional(),
+
   startedOn: optionalDate,
   endedOn: optionalDate,
-  visibility: z.enum(['PRIVATE', 'PUBLIC']).optional(),
-  sortOrder: z.number().int().min(0).max(100000).optional(),
+
+  visibility: z.enum([
+    'PRIVATE',
+    'PUBLIC',
+  ]).optional(),
+
+  sortOrder: z.number()
+    .int()
+    .min(0)
+    .max(100000)
+    .optional(),
+
   isFeatured: z.boolean().optional(),
+
+  // New: optional custom content.
+  // Omitted means an existing-style project.
+  // Use {schemaVersion:1, sections:[]} to clear content.
+  content: projectContentSchema.optional(),
 });
 
 export const projectVersionSchema = z.number()
@@ -91,7 +116,9 @@ export const updateProjectSchema =
     })
     .refine(
       (data) =>
-        Object.keys(data).some((key) => key !== 'version'),
+        Object.keys(data).some(
+          (key) => key !== 'version',
+        ),
       'Provide at least one project field to update.',
     );
 
@@ -110,8 +137,9 @@ export const reorderProjectsSchema = z.strictObject({
     .max(100)
     .refine(
       (items) =>
-        new Set(items.map((item) => item.id)).size ===
-        items.length,
+        new Set(
+          items.map((item) => item.id),
+        ).size === items.length,
       'Project IDs must not contain duplicates.',
     ),
 });

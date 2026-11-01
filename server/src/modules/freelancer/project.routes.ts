@@ -1,12 +1,9 @@
 import { Router } from 'express';
-import type { NextFunction, Response } from 'express';
-
+import type {NextFunction, Response} from 'express';
 import { rateLimit } from 'express-rate-limit';
-
-import { Prisma } from '../../generated/prisma/client.js';
-
-import { requireSession } from '../auth/require-session.js';
-import { requireCsrf } from '../auth/require-csrf.js';
+import {Prisma} from '../../generated/prisma/client.js';
+import {requireSession} from '../auth/require-session.js';
+import {requireCsrf} from '../auth/require-csrf.js';
 
 import {
   PortfolioSetupRequiredError,
@@ -23,6 +20,7 @@ import {
 
 import {
   listMyProjects,
+  getMyProject,
   createMyProject,
   updateMyProject,
   deleteMyProject,
@@ -31,7 +29,7 @@ import {
   ProjectLimitError,
   ProjectDateRangeError,
   ProjectOrderError,
-  ProjectVersionConflictError
+  ProjectVersionConflictError,
 } from './project.service.js';
 
 export const projectRouter = Router();
@@ -49,14 +47,26 @@ function handleError(
   error: unknown,
   res: Response,
   next: NextFunction,
-) {
+): void {
   if (error instanceof ProjectNotFoundError) {
-    res.status(404).json({ error: error.message });
+    res.status(404).json({
+      error: error.message,
+    });
     return;
   }
 
   if (error instanceof ProjectDateRangeError) {
-    res.status(400).json({ error: error.message });
+    res.status(400).json({
+      error: error.message,
+    });
+    return;
+  }
+
+  if (error instanceof ProjectVersionConflictError) {
+    res.status(409).json({
+      error: error.message,
+      code: 'STALE_VERSION',
+    });
     return;
   }
 
@@ -66,7 +76,9 @@ function handleError(
     error instanceof ProjectLimitError ||
     error instanceof ProjectOrderError
   ) {
-    res.status(409).json({ error: error.message });
+    res.status(409).json({
+      error: error.message,
+    });
     return;
   }
 
@@ -80,21 +92,16 @@ function handleError(
     return;
   }
 
-  if (error instanceof ProjectVersionConflictError) {
-    res.status(409).json({
-      error: error.message,
-      code: 'STALE_VERSION',
-    });
-    return;
-  }
-
   next(error);
 }
 
 function invalidInput(
   res: Response,
-  issues: { path: PropertyKey[]; message: string }[],
-) {
+  issues: {
+    path: PropertyKey[];
+    message: string;
+  }[],
+): void {
   res.status(400).json({
     error: 'Invalid project information.',
     issues: issues.map((issue) => ({
@@ -104,29 +111,82 @@ function invalidInput(
   });
 }
 
+// ---------------------------------------------------
 // GET /api/freelancer/projects
-projectRouter.get('/projects', async (_req, res, next) => {
-  try {
-    const projects = await listMyProjects(
-      res.locals.authUser.id as string,
+//
+// Lightweight owner-only listing.
+// Custom content is intentionally excluded.
+// ---------------------------------------------------
+
+projectRouter.get(
+  '/projects',
+  async (_req, res, next) => {
+    try {
+      const projects = await listMyProjects(
+        res.locals.authUser.id as string,
+      );
+
+      res.status(200).json({ projects });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// ---------------------------------------------------
+// GET /api/freelancer/projects/:id
+//
+// New endpoint: fetch one full project.
+// Returns 404 for foreign or missing project IDs.
+// ---------------------------------------------------
+
+projectRouter.get(
+  '/projects/:id',
+  async (req, res, next) => {
+    const id = projectIdSchema.safeParse(
+      req.params.id,
     );
 
-    res.status(200).json({ projects });
-  } catch (error) {
-    next(error);
-  }
-});
+    if (!id.success) {
+      res.status(400).json({
+        error: 'Invalid project ID.',
+      });
+      return;
+    }
 
+    try {
+      const project = await getMyProject(
+        res.locals.authUser.id as string,
+        id.data,
+      );
+
+      res.status(200).json({ project });
+    } catch (error) {
+      handleError(error, res, next);
+    }
+  },
+);
+
+// ---------------------------------------------------
 // POST /api/freelancer/projects
+//
+// Optional validated custom content.
+// ---------------------------------------------------
+
 projectRouter.post(
   '/projects',
   requireCsrf,
   mutationLimiter,
   async (req, res, next) => {
-    const parsed = createProjectSchema.safeParse(req.body);
+    const parsed = createProjectSchema.safeParse(
+      req.body,
+    );
 
     if (!parsed.success) {
-      invalidInput(res, parsed.error.issues);
+      invalidInput(
+        res,
+        parsed.error.issues,
+      );
       return;
     }
 
@@ -143,16 +203,26 @@ projectRouter.post(
   },
 );
 
+// ---------------------------------------------------
 // PUT /api/freelancer/projects/order
+//
+// Reorders projects atomically with version checks.
+// ---------------------------------------------------
+
 projectRouter.put(
   '/projects/order',
   requireCsrf,
   mutationLimiter,
   async (req, res, next) => {
-    const parsed = reorderProjectsSchema.safeParse(req.body);
+    const parsed = reorderProjectsSchema.safeParse(
+      req.body,
+    );
 
     if (!parsed.success) {
-      invalidInput(res, parsed.error.issues);
+      invalidInput(
+        res,
+        parsed.error.issues,
+      );
       return;
     }
 
@@ -169,18 +239,36 @@ projectRouter.put(
   },
 );
 
+// ---------------------------------------------------
 // PATCH /api/freelancer/projects/:id
+//
+// Owner-only mutation with optimistic concurrency.
+// ---------------------------------------------------
+
 projectRouter.patch(
   '/projects/:id',
   requireCsrf,
   mutationLimiter,
   async (req, res, next) => {
-    const id = projectIdSchema.safeParse(req.params.id);
-    const input = updateProjectSchema.safeParse(req.body);
+    const id = projectIdSchema.safeParse(
+      req.params.id,
+    );
+
+    const input = updateProjectSchema.safeParse(
+      req.body,
+    );
 
     if (!id.success || !input.success) {
       res.status(400).json({
         error: 'Invalid project ID or update data.',
+        ...(!input.success
+          ? {
+              issues: input.error.issues.map((issue) => ({
+                field: issue.path.map(String).join('.'),
+                message: issue.message,
+              })),
+            }
+          : {}),
       });
       return;
     }
@@ -199,27 +287,29 @@ projectRouter.patch(
   },
 );
 
-/**
- * DELETE /api/freelancer/projects/:id
- *
- * Requires:
- * - Authenticated session
- * - Valid CSRF token
- * - Project ownership
- * - Current project version
- */
+// ---------------------------------------------------
+// DELETE /api/freelancer/projects/:id
+//
+// Owner-only deletion requiring current version.
+// ---------------------------------------------------
 
 projectRouter.delete(
   '/projects/:id',
   requireCsrf,
   mutationLimiter,
-    async (req, res, next) => {
-    const id = projectIdSchema.safeParse(req.params.id);
-    const input = deleteProjectSchema.safeParse(req.body);
+  async (req, res, next) => {
+    const id = projectIdSchema.safeParse(
+      req.params.id,
+    );
+
+    const input = deleteProjectSchema.safeParse(
+      req.body,
+    );
 
     if (!id.success || !input.success) {
       res.status(400).json({
-        error: 'A valid project ID and current version are required.',
+        error:
+          'A valid project ID and current version are required.',
       });
       return;
     }
@@ -235,5 +325,5 @@ projectRouter.delete(
     } catch (error) {
       handleError(error, res, next);
     }
-  }
+  },
 );
