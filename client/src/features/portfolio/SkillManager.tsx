@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
+import { SortablePortfolioList } from './SortablePortfolioList';
 
 import type {
   PortfolioSkill,
@@ -10,16 +11,20 @@ interface Props {
   skills: PortfolioSkill[];
   canEdit: boolean;
   busy: boolean;
+
   onAdd: (name: string) => Promise<boolean>;
+
   onRename: (
     id: string,
     name: string,
     version: number,
   ) => Promise<boolean>;
+
   onDelete: (
     id: string,
     version: number,
   ) => Promise<boolean>;
+
   onReorder: (
     items: VersionedRecord[],
   ) => Promise<boolean>;
@@ -38,12 +43,15 @@ export function SkillManager({
 
   const [editingId, setEditingId] =
     useState<string | null>(null);
+
   const [editingVersion, setEditingVersion] =
     useState<number | null>(null);
+
   const [editName, setEditName] = useState('');
 
   const [deletingId, setDeletingId] =
     useState<string | null>(null);
+
   const [deletingVersion, setDeletingVersion] =
     useState<number | null>(null);
 
@@ -52,7 +60,9 @@ export function SkillManager({
 
     const trimmed = name.trim();
 
-    if (!trimmed || busy || !canEdit) return;
+    if (!trimmed || busy || !canEdit) {
+      return;
+    }
 
     if (await onAdd(trimmed)) {
       setName('');
@@ -110,28 +120,6 @@ export function SkillManager({
     }
   }
 
-  function move(index: number, direction: -1 | 1) {
-    if (busy || !canEdit) return;
-
-    const target = index + direction;
-
-    if (target < 0 || target >= skills.length) return;
-
-    const items: VersionedRecord[] = skills.map(
-      (skill) => ({
-        id: skill.id,
-        version: skill.version,
-      }),
-    );
-
-    [items[index], items[target]] = [
-      items[target]!,
-      items[index]!,
-    ];
-
-    void onReorder(items);
-  }
-
   return (
     <section className="onboarding-card portfolio-section">
       <h2>Professional skills</h2>
@@ -159,7 +147,7 @@ export function SkillManager({
               onChange={(event) =>
                 setName(event.target.value)
               }
-              placeholder="React, C++, Molecular Biology..."
+              placeholder="Design, Writing, Photography..."
               required
             />
           </div>
@@ -183,12 +171,14 @@ export function SkillManager({
           No skills added yet.
         </p>
       ) : (
-        <ul className="portfolio-skill-list">
-          {skills.map((skill, index) => (
-            <li
-              key={skill.id}
-              className="portfolio-skill-item"
-            >
+        <SortablePortfolioList
+          items={skills}
+          disabled={!canEdit || busy}
+          showHandles={canEdit}
+          label={(skill) => skill.name}
+          onReorder={onReorder}
+          renderItem={(skill) => (
+            <div className="portfolio-skill-item">
               {editingId === skill.id && canEdit ? (
                 <form
                   className="portfolio-skill-edit"
@@ -257,29 +247,6 @@ export function SkillManager({
                       <button
                         type="button"
                         className="secondary-button"
-                        disabled={busy || index === 0}
-                        aria-label={`Move ${skill.name} up`}
-                        onClick={() => move(index, -1)}
-                      >
-                        Up
-                      </button>
-
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        disabled={
-                          busy ||
-                          index === skills.length - 1
-                        }
-                        aria-label={`Move ${skill.name} down`}
-                        onClick={() => move(index, 1)}
-                      >
-                        Down
-                      </button>
-
-                      <button
-                        type="button"
-                        className="secondary-button"
                         disabled={busy}
                         onClick={() => {
                           setDeletingId(skill.id);
@@ -325,9 +292,9 @@ export function SkillManager({
                   </div>
                 </div>
               )}
-            </li>
-          ))}
-        </ul>
+            </div>
+          )}
+        />
       )}
     </section>
   );

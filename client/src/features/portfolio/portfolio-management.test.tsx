@@ -8,6 +8,8 @@ import { profileApi } from '../profile/profile.api';
 import { portfolioApi } from './portfolio.api';
 import { PortfolioManagementPage } from './PortfolioManagementPage';
 import type { FreelancerProfile } from '../onboarding/onboarding.types';
+import type { ReactNode } from 'react';
+import type { VersionedRecord } from './portfolio.types';
 import type {
   PortfolioProject,
   PortfolioSkill,
@@ -34,6 +36,75 @@ vi.mock('./portfolio.api', () => ({
     deleteSkill: vi.fn(),
     reorderSkills: vi.fn(),
   },
+}));
+
+
+/**
+ * Portfolio page integration tests verify which versioned
+ * records are submitted when an item is moved.
+ *
+ * Actual drag-end handling is tested separately in
+ * SortablePortfolioList.test.tsx.
+ */
+type TestSortableItem = VersionedRecord & {
+  title?: string;
+  name?: string;
+};
+
+vi.mock('./SortablePortfolioList', () => ({
+  SortablePortfolioList: ({
+    items,
+    disabled,
+    label,
+    renderItem,
+    onReorder,
+  }: {
+    items: readonly TestSortableItem[];
+    disabled?: boolean;
+    label: (item: TestSortableItem) => string;
+    renderItem: (
+      item: TestSortableItem,
+      index: number,
+    ) => ReactNode;
+    onReorder: (
+      items: VersionedRecord[],
+    ) => Promise<boolean>;
+  }) => (
+    <div role="list">
+      {items.map((item, index) => (
+        <div key={item.id} role="listitem">
+          {!disabled && index > 0 && (
+            <button
+              type="button"
+              aria-label={`Simulate drag ${label(item)} up`}
+              onClick={() => {
+                const reordered = [...items];
+
+                [
+                  reordered[index - 1],
+                  reordered[index],
+                ] = [
+                  reordered[index]!,
+                  reordered[index - 1]!,
+                ];
+
+                void onReorder(
+                  reordered.map((record) => ({
+                    id: record.id,
+                    version: record.version,
+                  })),
+                );
+              }}
+            >
+              Simulate reorder
+            </button>
+          )}
+
+          {renderItem(item, index)}
+        </div>
+      ))}
+    </div>
+  ),
 }));
 
 const draftProfile: FreelancerProfile = {
@@ -207,7 +278,7 @@ test('requires confirmation before deleting projects', async () => {
   );
 });
 
-test('reorders projects using their IDs', async () => {
+test('submits versioned project order after dragging', async () => {
   const second = {
     ...project,
     id: '33333333-3333-4333-8333-333333333333',
@@ -230,7 +301,7 @@ test('reorders projects using their IDs', async () => {
 
   fireEvent.click(
     screen.getByRole('button', {
-      name: 'Move Second Project up',
+      name: 'Simulate drag Second Project up',
     }),
   );
 
@@ -353,6 +424,12 @@ test('published portfolios are read-only', async () => {
   expect(
     screen.queryByRole('button', {
       name: 'Delete Research Dashboard',
+    }),
+  ).not.toBeInTheDocument();
+
+  expect(
+    screen.queryByRole('button', {
+      name: /Simulate drag/,
     }),
   ).not.toBeInTheDocument();
 });
@@ -539,7 +616,7 @@ test('reorders skills with their current versions', async () => {
 
   fireEvent.click(
     screen.getByRole('button', {
-      name: 'Move React up',
+      name: 'Simulate drag React up',
     }),
   );
 
