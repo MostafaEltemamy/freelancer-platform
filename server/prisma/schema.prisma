@@ -125,6 +125,10 @@ model PortfolioProject {
   sortOrder  Int                        @default(0) @map("sort_order")
   isFeatured Boolean                    @default(false) @map("is_featured")
 
+  // Freelancer-defined project sections and fields.
+  // Null preserves compatibility with existing projects.
+  content Json? @db.JsonB
+
   // Optimistic concurrency control
   version Int @default(1)
 
