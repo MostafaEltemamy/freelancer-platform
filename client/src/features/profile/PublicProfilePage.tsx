@@ -166,6 +166,7 @@ function PublicProfileContent({ username }: { username: string }) {
         )}
 
         <PublicPortfolioSections
+          username={profile.username}
           projects={profile.projects}
           skills={profile.skills}
         />

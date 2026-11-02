@@ -9,6 +9,7 @@ import type {
 
 import type {
   PublicProfileResponse,
+  PublicProjectDetailResponse
 } from './profile.types';
 
 export const profileApi = {
@@ -52,6 +53,17 @@ export const profileApi = {
   getPublic(username: string): Promise<PublicProfileResponse> {
     return apiRequest<PublicProfileResponse>(
       `/api/public/freelancers/${encodeURIComponent(username)}`,
+    );
+  },
+
+  getPublicProject(
+    username: string,
+    slug: string,
+  ): Promise<PublicProjectDetailResponse> {
+    return apiRequest<PublicProjectDetailResponse>(
+      `/api/public/freelancers/` +
+      `${encodeURIComponent(username)}/projects/` +
+      `${encodeURIComponent(slug)}`,
     );
   },
 };

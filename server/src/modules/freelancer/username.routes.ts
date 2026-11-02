@@ -17,6 +17,13 @@ import {
   UsernameUnavailableError,
 } from './username.service.js';
 
+import {createProjectSchema} from './project.schemas.js';
+
+import {
+  emptyProjectContent,
+  projectContentSchema,
+} from './project-content.schemas.js';
+
 export const freelancerRouter = Router();
 export const publicFreelancerRouter = Router();
 
@@ -129,6 +136,134 @@ freelancerRouter.post(
         return;
       }
 
+      next(error);
+    }
+  },
+);
+
+// ------------------------------------------------------
+// Public project detail
+//
+// GET /api/public/freelancers/:username/projects/:slug
+//
+// No customer login required.
+// Never expose draft profiles or private projects.
+// ------------------------------------------------------
+
+publicFreelancerRouter.get(
+  '/:username/projects/:slug',
+  async (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
+
+    const username = usernameSyntaxSchema.safeParse(
+      req.params.username,
+    );
+
+    const slug = createProjectSchema.shape.slug.safeParse(
+      req.params.slug,
+    );
+
+    // Invalid and reserved identifiers are indistinguishable
+    // from unavailable public resources.
+    if (
+      !username.success ||
+      isReservedUsername(username.data) ||
+      !slug.success
+    ) {
+      res.status(404).json({
+        error: 'Project not found.',
+      });
+      return;
+    }
+
+    try {
+      const project =
+        await prisma.portfolioProject.findFirst({
+          where: {
+            slug: slug.data,
+            visibility: 'PUBLIC',
+
+            profile: {
+              is: {
+                username: username.data,
+                status: 'PUBLISHED',
+                publishedAt: { not: null },
+                onboardingCompletedAt: { not: null },
+              },
+            },
+          },
+
+          select: {
+            slug: true,
+            title: true,
+            summary: true,
+            description: true,
+            role: true,
+            projectUrl: true,
+            sourceUrl: true,
+            technologies: true,
+            startedOn: true,
+            endedOn: true,
+            isFeatured: true,
+            content: true,
+          },
+        });
+
+      if (!project) {
+        res.status(404).json({
+          error: 'Project not found.',
+        });
+        return;
+      }
+
+      // Accept only our supported content structure.
+      // Legacy SQL NULL becomes an empty document.
+      const validated = projectContentSchema.safeParse(
+        project.content ?? emptyProjectContent(),
+      );
+
+      const content = validated.success
+        ? {
+            schemaVersion: 1 as const,
+
+            sections: validated.data.sections.map(
+              (section) => ({
+                title: section.title,
+                description: section.description,
+
+                // Section and field UUIDs are editor metadata.
+                // Public visitors do not need them.
+                fields: section.fields.map((field) => ({
+                  label: field.label,
+                  type: field.type,
+                  value: field.value,
+                })),
+              }),
+            ),
+          }
+        : emptyProjectContent();
+
+      const publicProject = {
+        slug: project.slug,
+        title: project.title,
+        summary: project.summary,
+        description: project.description,
+        role: project.role,
+        projectUrl: project.projectUrl,
+        sourceUrl: project.sourceUrl,
+        technologies: project.technologies,
+        startedOn: project.startedOn,
+        endedOn: project.endedOn,
+        isFeatured: project.isFeatured,
+      };
+
+      res.status(200).json({
+        project: {
+          ...publicProject,
+          content,
+        },
+      });
+    } catch (error) {
       next(error);
     }
   },

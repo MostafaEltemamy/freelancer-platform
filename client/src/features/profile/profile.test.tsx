@@ -560,6 +560,21 @@ test('displays featured projects, technologies and skills', async () => {
     'Featured Research Dashboard',
     'Laboratory Management System',
   ]);
+  
+  const caseStudyLinks = screen.getAllByRole('link', {
+    name: 'View full case study',
+  });
+
+  expect(caseStudyLinks).toHaveLength(2);
+  expect(caseStudyLinks[0]).toHaveAttribute(
+    'href',
+    '/u/testfreelancer/projects/featured-work',
+  );
+
+  expect(caseStudyLinks[1]).toHaveAttribute(
+    'href',
+    '/u/testfreelancer/projects/second-work',
+  );
 
   expect(screen.getByText('Featured')).toBeInTheDocument();
   expect(screen.getByText('TypeScript')).toBeInTheDocument();

@@ -31,3 +31,44 @@ export interface PublicFreelancerProfile {
 export interface PublicProfileResponse {
   profile: PublicFreelancerProfile;
 }
+
+export type PublicProjectField =
+  | {
+      label: string;
+      type: 'SHORT_TEXT' | 'LONG_TEXT' | 'URL' | 'DATE';
+      value: string | null;
+    }
+  | {
+      label: string;
+      type: 'NUMBER';
+      value: number | null;
+    }
+  | {
+      label: string;
+      type: 'BOOLEAN';
+      value: boolean | null;
+    }
+  | {
+      label: string;
+      type: 'LIST';
+      value: string[];
+    };
+
+export interface PublicProjectSection {
+  title: string;
+  description: string | null;
+  fields: PublicProjectField[];
+}
+
+export interface PublicProjectContent {
+  schemaVersion: 1;
+  sections: PublicProjectSection[];
+}
+
+export interface PublicProjectDetail extends PublicPortfolioProject {
+  content: PublicProjectContent;
+}
+
+export interface PublicProjectDetailResponse {
+  project: PublicProjectDetail;
+}
