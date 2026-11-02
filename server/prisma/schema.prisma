@@ -4,6 +4,7 @@ generator client {
   moduleFormat           = "esm"
   generatedFileExtension = "ts"
   importFileExtension    = "js"
+  previewFeatures        = ["partialIndexes"]
 }
 
 datasource db {
@@ -139,6 +140,9 @@ model PortfolioProject {
   // Ownership
   profile FreelancerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
+  // Images, videos and documents belonging to this project.
+  media ProjectMedia[]
+
   @@unique([profileId, slug])
   @@index([profileId, visibility, sortOrder])
   @@map("portfolio_projects")
@@ -168,4 +172,68 @@ model ProfileSkill {
   @@unique([profileId, normalizedName])
   @@index([profileId, sortOrder])
   @@map("profile_skills")
+}
+
+enum ProjectMediaKind {
+  IMAGE
+  VIDEO
+  DOCUMENT
+}
+
+enum ProjectMediaStatus {
+  PENDING
+  READY
+  FAILED
+}
+
+model ProjectMedia {
+  id        String @id @default(uuid()) @db.Uuid
+  projectId String @map("project_id") @db.Uuid
+
+  // Server-generated object-storage references.
+  // Never accept a storage key directly from the client.
+  storageKey String  @unique @map("storage_key") @db.VarChar(512)
+  previewKey String? @unique @map("preview_key") @db.VarChar(512)
+
+  // Original file metadata.
+  originalFilename String @map("original_filename") @db.VarChar(255)
+  mimeType         String @map("mime_type") @db.VarChar(100)
+  fileSizeBytes    Int    @map("file_size_bytes")
+
+  // Classified by the backend.
+  kind   ProjectMediaKind
+  status ProjectMediaStatus @default(PENDING)
+
+  // Exactly one image can be the project cover.
+  isCover Boolean @default(false) @map("is_cover")
+
+  // Order inside the media gallery.
+  sortOrder Int @default(0) @map("sort_order")
+
+  // Optional association with a custom project section.
+  sectionId String? @map("section_id") @db.Uuid
+
+  // Image and video metadata populated after processing.
+  width  Int?
+  height Int?
+
+  // Display and accessibility metadata.
+  altText String? @map("alt_text") @db.VarChar(200)
+  caption String? @db.VarChar(500)
+
+  // Concurrency and audit information.
+  version Int @default(1)
+
+  readyAt   DateTime? @map("ready_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  // Deleting a project also removes its metadata records.
+  project PortfolioProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // Database-level guarantee: at most one cover per project.
+  @@unique([projectId], map: "project_media_unique_cover", where: { isCover: true })
+  @@index([projectId, status, sortOrder])
+  @@index([projectId, sectionId, sortOrder])
+  @@map("project_media")
 }
