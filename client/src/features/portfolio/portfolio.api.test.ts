@@ -29,11 +29,26 @@ test('lists freelancer projects', async () => {
   );
 });
 
+test('fetches full project details only when requested', async () => {
+  const projectId =
+    '11111111-1111-4111-8111-111111111111';
+
+  await portfolioApi.getProject(projectId);
+
+  expect(apiRequest).toHaveBeenCalledWith(
+    `/api/freelancer/projects/${projectId}`,
+  );
+});
+
 test('creates a project using protected POST', async () => {
   const input = {
     slug: 'research-dashboard',
     title: 'Research Dashboard',
     technologies: ['React', 'TypeScript'],
+    content: {
+      schemaVersion: 1 as const,
+      sections: [],
+    },
   };
 
   await portfolioApi.createProject(input);

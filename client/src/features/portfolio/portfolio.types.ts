@@ -5,6 +5,54 @@ export interface VersionedRecord {
   version: number;
 }
 
+export type ProjectFieldType =
+  | 'SHORT_TEXT'
+  | 'LONG_TEXT'
+  | 'URL'
+  | 'NUMBER'
+  | 'DATE'
+  | 'BOOLEAN'
+  | 'LIST';
+
+interface ProjectFieldBase {
+  id: string;
+  label: string;
+}
+
+export type ProjectContentField =
+  | (ProjectFieldBase & {
+      type: 'SHORT_TEXT' | 'LONG_TEXT' | 'URL' | 'DATE';
+      value: string | null;
+    })
+  | (ProjectFieldBase & {
+      type: 'NUMBER';
+      value: number | null;
+    })
+  | (ProjectFieldBase & {
+      type: 'BOOLEAN';
+      value: boolean | null;
+    })
+  | (ProjectFieldBase & {
+      type: 'LIST';
+      value: string[];
+    });
+
+export interface ProjectContentSection {
+  id: string;
+  title: string;
+  description: string | null;
+  fields: ProjectContentField[];
+}
+
+export interface ProjectContent {
+  schemaVersion: 1;
+  sections: ProjectContentSection[];
+}
+
+export interface PortfolioProjectDetail extends PortfolioProject {
+  content: ProjectContent;
+}
+
 export interface PortfolioProject {
   id: string;
   slug: string;
@@ -32,6 +80,7 @@ export interface PortfolioProject {
 export interface CreateProjectInput {
   slug: string;
   title: string;
+  content?: ProjectContent;
   summary?: string | null;
   description?: string | null;
   role?: string | null;
@@ -56,6 +105,10 @@ export interface ProjectsResponse {
 
 export interface ProjectResponse {
   project: PortfolioProject;
+}
+
+export interface ProjectDetailResponse {
+  project: PortfolioProjectDetail;
 }
 
 export interface PortfolioSkill {

@@ -10,6 +10,7 @@ import type {
   SkillResponse,
   SkillInput,
   VersionedRecord,
+  ProjectDetailResponse,
 } from './portfolio.types';
 
 const PROJECTS_PATH = '/api/freelancer/projects';
@@ -26,6 +27,14 @@ export const portfolioApi = {
 
   listProjects(): Promise<ProjectsResponse> {
     return apiRequest<ProjectsResponse>(PROJECTS_PATH);
+  },
+
+  getProject(
+    id: string,
+  ): Promise<ProjectDetailResponse> {
+    return apiRequest<ProjectDetailResponse>(
+      itemPath(PROJECTS_PATH, id),
+    );
   },
 
   createProject(

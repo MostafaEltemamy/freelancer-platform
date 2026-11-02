@@ -26,6 +26,7 @@ vi.mock('../profile/profile.api', () => ({
 vi.mock('./portfolio.api', () => ({
   portfolioApi: {
     listProjects: vi.fn(),
+    getProject: vi.fn(),
     createProject: vi.fn(),
     updateProject: vi.fn(),
     deleteProject: vi.fn(),
@@ -37,7 +38,6 @@ vi.mock('./portfolio.api', () => ({
     reorderSkills: vi.fn(),
   },
 }));
-
 
 /**
  * Portfolio page integration tests verify which versioned
@@ -160,6 +160,18 @@ function renderPortfolio() {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(portfolioApi.getProject).mockImplementation(
+    async (id) => ({
+      project: {
+        ...project,
+        id,
+        content: {
+          schemaVersion: 1,
+          sections: [],
+        },
+      },
+    }),
+  );
 
   vi.mocked(profileApi.getMine).mockResolvedValue({
     profile: draftProfile,
@@ -493,7 +505,7 @@ test('preserves unsaved project changes after a version conflict', async () => {
     }),
   );
 
-  const titleInput = screen.getByLabelText('Project title');
+  const titleInput = await screen.findByLabelText('Project title');
 
   fireEvent.change(titleInput, {
     target: { value: 'My unsaved project changes' },
@@ -664,7 +676,7 @@ test('reloads newer data only after explicit conflict recovery', async () => {
   );
 
   fireEvent.change(
-    screen.getByLabelText('Project title'),
+    await screen.findByLabelText('Project title'),
     {
       target: {
         value: 'My unsaved project draft',
@@ -750,7 +762,7 @@ test('keeps the unsaved project draft if conflict refresh fails', async () => {
   );
 
   fireEvent.change(
-    screen.getByLabelText('Project title'),
+    await screen.findByLabelText('Project title'),
     {
       target: {
         value: 'Important unsaved research project',
@@ -790,4 +802,118 @@ test('keeps the unsaved project draft if conflict refresh fails', async () => {
       name: 'Version conflict recovery',
     }),
   ).toBeInTheDocument();
+});
+
+test('loads full project content before saving an existing project', async () => {
+  const customContent = {
+    schemaVersion: 1 as const,
+    sections: [
+      {
+        id: '55555555-5555-4555-8555-555555555555',
+        title: 'Deliverables',
+        description: null,
+        fields: [
+          {
+            id: '66666666-6666-4666-8666-666666666666',
+            type: 'SHORT_TEXT' as const,
+            label: 'Client',
+            value: 'Café Luna',
+          },
+        ],
+      },
+    ],
+  };
+
+  vi.mocked(portfolioApi.listProjects).mockResolvedValue({
+    projects: [project],
+  });
+
+  vi.mocked(portfolioApi.getProject).mockResolvedValue({
+    project: {
+      ...project,
+      content: customContent,
+    },
+  });
+
+  vi.mocked(portfolioApi.updateProject).mockResolvedValue({
+    project,
+  });
+
+  renderPortfolio();
+
+  await screen.findByText('Research Dashboard');
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Edit Research Dashboard',
+    }),
+  );
+
+  await screen.findByLabelText('Project title');
+
+  expect(portfolioApi.getProject).toHaveBeenCalledWith(
+    project.id,
+  );
+
+  fireEvent.change(
+    screen.getByLabelText('Project title'),
+    {
+      target: {
+        value: 'Updated Research Dashboard',
+      },
+    },
+  );
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Save project',
+    }),
+  );
+
+  expect(portfolioApi.updateProject).toHaveBeenCalledWith(
+    project.id,
+    expect.objectContaining({
+      title: 'Updated Research Dashboard',
+      content: customContent,
+    }),
+    project.version,
+  );
+});
+
+
+test('does not open an empty editor when project details fail to load', async () => {
+  vi.mocked(portfolioApi.listProjects).mockResolvedValue({
+    projects: [project],
+  });
+
+  vi.mocked(portfolioApi.getProject).mockRejectedValue(
+    new ApiError(
+      'Unable to load project details.',
+      503,
+    ),
+  );
+
+  renderPortfolio();
+
+  await screen.findByText('Research Dashboard');
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Edit Research Dashboard',
+    }),
+  );
+
+  expect(
+    await screen.findByRole('alert'),
+  ).toHaveTextContent(
+    'Unable to load project details.',
+  );
+
+  expect(
+    screen.queryByLabelText('Project title'),
+  ).not.toBeInTheDocument();
+
+  expect(
+    portfolioApi.updateProject,
+  ).not.toHaveBeenCalled();
 });
