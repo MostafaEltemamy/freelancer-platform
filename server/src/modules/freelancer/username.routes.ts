@@ -24,6 +24,11 @@ import {
   projectContentSchema,
 } from './project-content.schemas.js';
 
+import {
+  presentPublicImage,
+  presentPublicGallery,
+} from './public-project-media.js';
+
 export const freelancerRouter = Router();
 export const publicFreelancerRouter = Router();
 
@@ -194,6 +199,29 @@ publicFreelancerRouter.get(
           },
 
           select: {
+            media: {
+              where: {
+                kind: 'IMAGE',
+                status: 'READY',
+                previewKey: {
+                  not: null,
+                },
+              },
+              orderBy: [
+                { isCover: 'desc' },
+                { sortOrder: 'asc' },
+                { createdAt: 'asc' },
+                { id: 'asc' },
+              ],
+              take: 40,
+              select: {
+                previewKey: true,
+                altText: true,
+                caption: true,
+                width: true,
+                height: true,
+              },
+            },
             slug: true,
             title: true,
             summary: true,
@@ -257,12 +285,18 @@ publicFreelancerRouter.get(
         isFeatured: project.isFeatured,
       };
 
+      const images = await presentPublicGallery(
+        project.media,
+      );
+
       res.status(200).json({
         project: {
           ...publicProject,
           content,
+          images,
         },
       });
+
     } catch (error) {
       next(error);
     }
@@ -320,6 +354,24 @@ publicFreelancerRouter.get(
             ],
             take: 100,
             select: {
+              media: {
+                where: {
+                  kind: 'IMAGE',
+                  status: 'READY',
+                  isCover: true,
+                  previewKey: {
+                    not: null,
+                  },
+                },
+                take: 1,
+                select: {
+                  previewKey: true,
+                  altText: true,
+                  caption: true,
+                  width: true,
+                  height: true,
+                },
+              },
               slug: true,
               title: true,
               summary: true,
@@ -355,7 +407,34 @@ publicFreelancerRouter.get(
         return;
       }
 
-      res.status(200).json({ profile });
+      const projects = await Promise.all(
+        profile.projects.map(async (project) => {
+          const { media, ...publicProject } = project;
+
+          const coverImage = media[0]
+            ? await presentPublicImage(media[0])
+            : null;
+
+          return {
+            ...publicProject,
+            coverImage,
+          };
+        }),
+      );
+
+      res.status(200).json({
+        profile: {
+          username: profile.username,
+          headline: profile.headline,
+          bio: profile.bio,
+          city: profile.city,
+          countryCode: profile.countryCode,
+          websiteUrl: profile.websiteUrl,
+          skills: profile.skills,
+          projects,
+        },
+      });
+
     } catch (error) {
       next(error);
     }

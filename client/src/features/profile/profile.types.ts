@@ -1,3 +1,11 @@
+export interface PublicProjectImage {
+  url: string;
+  altText: string | null;
+  caption: string | null;
+  width: number | null;
+  height: number | null;
+}
+
 export interface PublicPortfolioProject {
   slug: string;
   title: string;
@@ -10,6 +18,7 @@ export interface PublicPortfolioProject {
   startedOn: string | null;
   endedOn: string | null;
   isFeatured: boolean;
+  coverImage?: PublicProjectImage | null; // Optional for compatibility with earlier API responses.
 }
 
 export interface PublicPortfolioSkill {
@@ -67,6 +76,7 @@ export interface PublicProjectContent {
 
 export interface PublicProjectDetail extends PublicPortfolioProject {
   content: PublicProjectContent;
+  images?: PublicProjectImage[];
 }
 
 export interface PublicProjectDetailResponse {

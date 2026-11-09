@@ -5,6 +5,8 @@ import type {
   PublicPortfolioSkill,
 } from './profile.types';
 
+import './public-project-media.css';
+
 interface Props {
   username: string;
   projects: PublicPortfolioProject[];
@@ -29,7 +31,7 @@ function safeExternalUrl(
       return url.toString();
     }
   } catch {
-    // Invalid links are never rendered.
+    // Ignore invalid external URLs.
   }
 
   return null;
@@ -45,90 +47,118 @@ function ProjectCard({
   const projectUrl = safeExternalUrl(project.projectUrl);
   const sourceUrl = safeExternalUrl(project.sourceUrl);
 
+  const detailPath =
+    `/u/${encodeURIComponent(username)}` +
+    `/projects/${encodeURIComponent(project.slug)}`;
+
   const dateLabel = [
     project.startedOn?.slice(0, 10),
     project.endedOn?.slice(0, 10),
   ].filter(Boolean).join(' – ');
 
-  const detailPath =
-    `/u/${encodeURIComponent(username)}` +
-    `/projects/${encodeURIComponent(project.slug)}`;
-
   return (
-    <article className="public-portfolio-project">
-      <div className="public-portfolio-project-heading">
-        <h3>{project.title}</h3>
-
-        {project.isFeatured && (
-          <span className="portfolio-chip">
-            Featured
-          </span>
-        )}
-      </div>
-
-      {project.summary && (
-        <p className="public-portfolio-summary">
-          {project.summary}
-        </p>
-      )}
-
-      {project.role && (
-        <p className="public-portfolio-meta">
-          Role: {project.role}
-        </p>
-      )}
-
-      {dateLabel && (
-        <p className="public-portfolio-meta">
-          {dateLabel}
-        </p>
-      )}
-
-      {project.technologies.length > 0 && (
-        <div
-          className="portfolio-chip-row"
-          aria-label="Project tags"
-        >
-          {project.technologies.map((technology) => (
-            <span
-              className="portfolio-chip"
-              key={technology}
-            >
-              {technology}
-            </span>
-          ))}
-        </div>
-      )}
-
-      <div className="onboarding-actions">
+    <article
+      className={[
+        'public-portfolio-project',
+        project.coverImage
+          ? 'public-portfolio-project--with-image'
+          : '',
+      ].filter(Boolean).join(' ')}
+    >
+      {project.coverImage && (
         <Link
-          className="primary-button"
           to={detailPath}
+          className="public-project-cover-link"
+          aria-label={`View ${project.title} case study`}
         >
-          View full case study
+          <img
+            className="public-project-cover-image"
+            src={project.coverImage.url}
+            alt={
+              project.coverImage.altText ||
+              `${project.title} project cover`
+            }
+            loading="lazy"
+            referrerPolicy="no-referrer"
+          />
         </Link>
+      )}
 
-        {projectUrl && (
-          <a
-            href={projectUrl}
-            className="secondary-button"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            View project
-          </a>
+      <div className="public-project-card-body">
+        <div className="public-portfolio-project-heading">
+          <h3>{project.title}</h3>
+
+          {project.isFeatured && (
+            <span className="portfolio-chip">
+              Featured
+            </span>
+          )}
+        </div>
+
+        {project.summary && (
+          <p className="public-portfolio-summary">
+            {project.summary}
+          </p>
         )}
 
-        {sourceUrl && (
-          <a
-            href={sourceUrl}
-            className="secondary-button"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            View source code
-          </a>
+        {project.role && (
+          <p className="public-portfolio-meta">
+            Role: {project.role}
+          </p>
         )}
+
+        {dateLabel && (
+          <p className="public-portfolio-meta">
+            {dateLabel}
+          </p>
+        )}
+
+        {project.technologies.length > 0 && (
+          <div
+            className="portfolio-chip-row"
+            aria-label="Project tags"
+          >
+            {project.technologies.map((technology) => (
+              <span
+                className="portfolio-chip"
+                key={technology}
+              >
+                {technology}
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="onboarding-actions">
+          <Link
+            className="primary-button"
+            to={detailPath}
+          >
+            View full case study
+          </Link>
+
+          {projectUrl && (
+            <a
+              href={projectUrl}
+              className="secondary-button"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View project
+            </a>
+          )}
+
+          {sourceUrl && (
+            <a
+              href={sourceUrl}
+              className="secondary-button"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View source code
+            </a>
+          )}
+        </div>
       </div>
     </article>
   );

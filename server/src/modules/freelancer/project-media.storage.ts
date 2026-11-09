@@ -189,17 +189,27 @@ export function uploadExpirySeconds(): number {
 }
 
 /**
- * Generate a short-lived, read-only URL for an approved
- * WebP preview.
+ * Create a temporary GET URL for a sanitized preview.
  *
- * The caller MUST authorize the record and verify
- * status=READY before passing its preview key here.
+ * Owner workspace: default 300 seconds.
+ * Public portfolio: explicitly request 60 seconds.
  *
- * This URL is a bearer credential valid for five minutes.
+ * The caller must authorize access before invoking this.
  */
 export async function presignImagePreview(
   previewKey: string,
+  expiresInSeconds = PREVIEW_EXPIRY_SECONDS,
 ): Promise<string> {
+  if (
+    !Number.isInteger(expiresInSeconds) ||
+    expiresInSeconds < 1 ||
+    expiresInSeconds > PREVIEW_EXPIRY_SECONDS
+  ) {
+    throw new MediaStorageError(
+      'Invalid image preview expiration.',
+    );
+  }
+
   return getSignedUrl(
     client(),
     new GetObjectCommand({
@@ -207,7 +217,7 @@ export async function presignImagePreview(
       Key: previewKey,
     }),
     {
-      expiresIn: PREVIEW_EXPIRY_SECONDS,
+      expiresIn: expiresInSeconds,
     },
   );
 }

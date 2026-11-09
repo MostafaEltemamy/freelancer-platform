@@ -13,6 +13,7 @@ import type {
 } from './profile.types';
 
 import './public-project-detail.css';
+import './public-project-media.css';
 
 type PageStatus =
   | 'loading'
@@ -209,6 +210,40 @@ function PublicCaseStudy({
             <p className="public-profile-bio">
               {project.description}
             </p>
+          </section>
+        )}
+
+        {(project.images?.length ?? 0) > 0 && (
+          <section
+            className="public-profile-section"
+            aria-label="Project gallery"
+          >
+            <h2>Project gallery</h2>
+
+            <div className="public-project-gallery">
+              {project.images?.map((image, index) => (
+                <figure
+                  className="public-project-gallery-item"
+                  key={`${index}-${image.url}`}
+                >
+                  <img
+                    src={image.url}
+                    alt={
+                      image.altText ||
+                      `${project.title} image ${index + 1}`
+                    }
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                  />
+
+                  {image.caption && (
+                    <figcaption>
+                      {image.caption}
+                    </figcaption>
+                  )}
+                </figure>
+              ))}
+            </div>
           </section>
         )}
 
