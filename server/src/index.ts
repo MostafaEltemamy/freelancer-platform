@@ -1,7 +1,7 @@
 import { app } from './app.js';
 import { prisma } from './database/prisma.js';
 import {startStorageDeletionWorker} from './modules/freelancer/storage-deletion.queue.js';
-
+import {startMediaReconciliationWorker} from './modules/freelancer/project-media.reconciliation.js';
 const port = Number(process.env.PORT ?? 5001);
 
 if (
@@ -35,6 +35,9 @@ server.on('error', (error) => {
 // eligible failures periodically.
 const stopStorageDeletionWorker =
   startStorageDeletionWorker();
+
+const stopMediaReconciliationWorker =
+startMediaReconciliationWorker();
 
 let shuttingDown = false;
 
@@ -74,8 +77,13 @@ function shutdown(signal: string): void {
     }
 
     try {
-      await stopStorageDeletionWorker();
+      await Promise.all([
+        stopStorageDeletionWorker(),
+        stopMediaReconciliationWorker(),
+      ]);
+
       await prisma.$disconnect();
+
     } catch {
       console.error(
         'Database or storage-worker cleanup failed.',

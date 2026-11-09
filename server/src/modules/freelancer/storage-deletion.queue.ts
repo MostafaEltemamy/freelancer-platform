@@ -40,6 +40,9 @@ export interface MediaCleanupSource {
 export async function enqueueMediaObjectCleanup(
   tx: Prisma.TransactionClient,
   media: readonly MediaCleanupSource[],
+  options: {
+    notBefore?: Date;
+  } = {},
 ): Promise<void> {
   const now = Date.now();
 
@@ -54,6 +57,7 @@ export async function enqueueMediaObjectCleanup(
         now,
         item.createdAt.getTime() +
           MEDIA_CLEANUP_GRACE_MS,
+        options.notBefore?.getTime() ?? 0,
       ),
     );
 

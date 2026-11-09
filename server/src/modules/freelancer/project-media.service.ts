@@ -29,7 +29,7 @@ import {
   processProjectImage,
 } from './project-media.image.js';
 
-const PENDING_LIFETIME_MS = 15 * 60_000;
+export const PENDING_LIFETIME_MS = 15 * 60_000;
 
 const MEDIA_SELECT = {
   id: true,

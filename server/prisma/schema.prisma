@@ -235,6 +235,7 @@ model ProjectMedia {
   @@unique([projectId], map: "project_media_unique_cover", where: { isCover: true })
   @@index([projectId, status, sortOrder])
   @@index([projectId, sectionId, sortOrder])
+  @@index([status, createdAt, updatedAt])
   @@map("project_media")
 }
 
