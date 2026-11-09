@@ -1,42 +1,47 @@
 import { apiRequest } from '../../lib/api-client';
 import { protectedWrite } from '../../lib/protected-write';
+import type {VersionedRecord} from './portfolio.types';
 
 export type MediaUploadStage =
   | 'preparing'
   | 'uploading'
   | 'verifying';
 
-export interface ProjectMediaRecord {
-  id: string;
+export interface ProjectMediaRecord extends VersionedRecord {
   projectId: string;
   originalFilename: string;
   mimeType: string;
   fileSizeBytes: number;
+
   kind: 'IMAGE' | 'VIDEO' | 'DOCUMENT';
   status: 'PENDING' | 'READY' | 'FAILED';
+
   isCover: boolean;
   sortOrder: number;
   sectionId: string | null;
+
   width: number | null;
   height: number | null;
+
   altText: string | null;
   caption: string | null;
-  version: number;
+
   createdAt: string;
   updatedAt: string;
   readyAt: string | null;
 
-  // Returned by the owner-only listing endpoint.
-  // Short-lived; never store it in the database.
+  // Temporary owner-authorized preview URL.
+  // Never save this value in the database.
   previewUrl?: string | null;
 }
 
-interface ProjectMediaListResponse {
+export interface ProjectMediaListResponse {
   media: ProjectMediaRecord[];
 }
 
 interface PreparedImageUpload {
   media: ProjectMediaRecord;
+
   upload: {
     method: 'PUT';
     url: string;
@@ -51,14 +56,59 @@ interface CompletedImageUpload {
   media: ProjectMediaRecord;
 }
 
+export interface MediaDetailsInput {
+  version: number;
+  altText: string | null;
+  caption: string | null;
+}
+
+export interface MediaDetailsResponse {
+  media: {
+    id: string;
+    version: number;
+    altText: string | null;
+    caption: string | null;
+  };
+}
+
+export interface MediaCoverResponse {
+  media: {
+    id: string;
+    version: number;
+    isCover: boolean;
+  };
+}
+
+export interface MediaOrderResponse {
+  order: {
+    items: Array<VersionedRecord & {
+      sortOrder: number;
+    }>;
+  };
+}
+
 function mediaPath(projectId: string): string {
   return (
-    `/api/freelancer/projects/` +
+    '/api/freelancer/projects/' +
     `${encodeURIComponent(projectId)}/media`
   );
 }
 
+function mediaItemPath(
+  projectId: string,
+  mediaId: string,
+): string {
+  return (
+    `${mediaPath(projectId)}/` +
+    encodeURIComponent(mediaId)
+  );
+}
+
 export const projectMediaApi = {
+  // ------------------------------------------------------
+  // Owner-only gallery listing
+  // ------------------------------------------------------
+
   list(
     projectId: string,
   ): Promise<ProjectMediaListResponse> {
@@ -66,6 +116,10 @@ export const projectMediaApi = {
       mediaPath(projectId),
     );
   },
+
+  // ------------------------------------------------------
+  // Existing image-upload lifecycle
+  // ------------------------------------------------------
 
   prepare(
     projectId: string,
@@ -93,15 +147,6 @@ export const projectMediaApi = {
     );
   },
 
-  /**
-   * Upload one image using our private R2 workflow.
-   *
-   * Authentication and CSRF are used only for
-   * backend API requests.
-   *
-   * The signed PUT is sent directly to object storage,
-   * without session cookies or API authorization headers.
-   */
   async uploadImage(
     projectId: string,
     file: File,
@@ -142,6 +187,53 @@ export const projectMediaApi = {
     return this.complete(
       projectId,
       prepared.media.id,
+    );
+  },
+
+  // ------------------------------------------------------
+  // NEW: Edit image description
+  // ------------------------------------------------------
+
+  updateDetails(
+    projectId: string,
+    mediaId: string,
+    input: MediaDetailsInput,
+  ): Promise<MediaDetailsResponse> {
+    return protectedWrite<MediaDetailsResponse>(
+      `${mediaItemPath(projectId, mediaId)}/details`,
+      'PATCH',
+      input,
+    );
+  },
+
+  // ------------------------------------------------------
+  // NEW: Set project cover
+  // ------------------------------------------------------
+
+  setCover(
+    projectId: string,
+    mediaId: string,
+    version: number,
+  ): Promise<MediaCoverResponse> {
+    return protectedWrite<MediaCoverResponse>(
+      `${mediaItemPath(projectId, mediaId)}/cover`,
+      'PUT',
+      { version },
+    );
+  },
+
+  // ------------------------------------------------------
+  // NEW: Reorder verified gallery images
+  // ------------------------------------------------------
+
+  reorder(
+    projectId: string,
+    items: VersionedRecord[],
+  ): Promise<MediaOrderResponse> {
+    return protectedWrite<MediaOrderResponse>(
+      `${mediaPath(projectId)}/order`,
+      'PUT',
+      { items },
     );
   },
 };
