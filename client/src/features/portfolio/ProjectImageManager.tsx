@@ -1,33 +1,12 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
-
-import type {
-  ChangeEvent,
-  DragEvent,
-} from 'react';
-
+import {useEffect, useRef, useState} from 'react';
+import type {ChangeEvent, DragEvent} from 'react';
 import { ApiError } from '../../lib/api-client';
-
 import { SortablePortfolioList } from './SortablePortfolioList';
-
+import {ProjectMediaDeleteConfirmation} from './ProjectMediaDeleteConfirmation';
 import { projectMediaApi } from './project-media.api';
-
-import type {
-  MediaUploadStage,
-  ProjectMediaRecord,
-} from './project-media.api';
-
-import type {
-  VersionedRecord,
-} from './portfolio.types';
-
-import {
-  validateProjectImage,
-} from './project-media.validation';
-
+import type {MediaUploadStage, ProjectMediaRecord} from './project-media.api';
+import type {VersionedRecord} from './portfolio.types';
+import {validateProjectImage} from './project-media.validation';
 import './project-image-manager.css';
 
 // ---------------------------------------------------------
@@ -106,6 +85,9 @@ export function ProjectImageManager({
   const [editing, setEditing] =
     useState<ImageDetailsDraft | null>(null);
 
+  const [confirmDelete, setConfirmDelete] =
+    useState<ProjectMediaRecord | null>(null);
+
   // Prevent further writes if the browser has outdated
   // versions or the latest saved data could not be loaded.
   const [needsRefresh, setNeedsRefresh] =
@@ -156,7 +138,8 @@ export function ProjectImageManager({
     if (
       operationActive.current ||
       refreshing ||
-      editing !== null
+      editing !== null ||
+      confirmDelete !== null
     ) {
       return;
     }
@@ -457,7 +440,7 @@ export function ProjectImageManager({
   async function reorderImages(
     items: VersionedRecord[],
   ): Promise<boolean> {
-    if (editing !== null || items.length < 2) {
+    if (editing !== null || confirmDelete !== null || items.length < 2) {
       return false;
     }
 
@@ -469,6 +452,61 @@ export function ProjectImageManager({
       'Gallery order updated successfully.',
     );
   }
+
+// -------------------------------------------------------
+// Confirm and delete one project image
+// -------------------------------------------------------
+
+function requestImageDeletion(
+  image: ProjectMediaRecord,
+): void {
+  if (
+    disabled ||
+    loading ||
+    working ||
+    refreshing ||
+    needsRefresh ||
+    editing !== null ||
+    confirmDelete !== null ||
+    operationActive.current
+  ) {
+    return;
+  }
+
+  setConfirmDelete(image);
+  setError(null);
+  setNotice(null);
+}
+
+function cancelImageDeletion(): void {
+  if (working || operationActive.current) {
+    return;
+  }
+
+  setConfirmDelete(null);
+}
+
+async function confirmImageDeletion(): Promise<void> {
+  const target = confirmDelete;
+
+  if (!target || editing !== null) {
+    return;
+  }
+
+  const saved = await runMutation(
+    () => projectMediaApi.deleteImage(
+      projectId,
+      target.id,
+      target.version,
+    ),
+    'Image removed from your portfolio. ' +
+      'Storage cleanup has been scheduled.',
+  );
+
+  if (saved) {
+    setConfirmDelete(null);
+  }
+}
 
   // -------------------------------------------------------
   // Derived display state
@@ -494,7 +532,9 @@ export function ProjectImageManager({
   const editingOpen = editing !== null;
 
   const galleryActionsDisabled =
-    controlsDisabled || editingOpen;
+    controlsDisabled ||
+    editingOpen ||
+    confirmDelete !== null;
 
   // -------------------------------------------------------
   // Render
@@ -521,7 +561,8 @@ export function ProjectImageManager({
           disabled={
             working ||
             refreshing ||
-            editingOpen
+            editingOpen ||
+            confirmDelete !== null
           }
           onClick={() => void refreshGallery()}
         >
@@ -685,6 +726,18 @@ export function ProjectImageManager({
                         {!disabled && (
                           <button
                             type="button"
+                            className="project-media-delete-link"
+                            disabled={galleryActionsDisabled}
+                            onClick={() => requestImageDeletion(image)}
+                            aria-label={`Delete ${image.originalFilename}`}
+                          >
+                            Delete image
+                          </button>
+                        )}
+
+                        {!disabled && (
+                          <button
+                            type="button"
                             className="secondary-button"
                             disabled={galleryActionsDisabled}
                             onClick={() => startEditing(image)}
@@ -701,6 +754,18 @@ export function ProjectImageManager({
                 )}
               />
             </div>
+          )}
+
+          {confirmDelete && (
+            <ProjectMediaDeleteConfirmation
+              media={confirmDelete}
+              busy={working}
+              confirmDisabled={
+                disabled || needsRefresh || refreshing
+              }
+              onConfirm={() => void confirmImageDeletion()}
+              onCancel={cancelImageDeletion}
+            />
           )}
 
           {editing && (
@@ -805,14 +870,32 @@ export function ProjectImageManager({
             <div className="project-media-pending">
               <h4>Uploads awaiting completion</h4>
 
-              {pendingImages.map((image) => (
-                <p key={image.id}>
-                  {image.originalFilename} —{' '}
-                  {image.status === 'PENDING'
-                    ? 'Pending'
-                    : 'Processing failed'}
-                </p>
-              ))}
+          {pendingImages.map((image) => (
+            <div
+              key={image.id}
+              className="project-media-pending-item"
+            >
+              <span>
+                {image.originalFilename} —{' '}
+                {image.status === 'PENDING'
+                  ? 'Pending'
+                  : 'Processing failed'}
+              </span>
+
+              {!disabled && (
+                <button
+                  type="button"
+                  className="project-media-delete-link"
+                  disabled={galleryActionsDisabled}
+                  onClick={() => requestImageDeletion(image)}
+                  aria-label={`Delete ${image.originalFilename}`}
+                >
+                  Remove upload
+                </button>
+              )}
+            </div>
+          ))}
+
             </div>
           )}
         </>

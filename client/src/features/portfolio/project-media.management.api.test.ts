@@ -92,3 +92,17 @@ test('sends complete versioned gallery ordering', async () => {
     },
   );
 });
+
+test('sends the current media version when deleting', async () => {
+  await projectMediaApi.deleteImage(
+    projectId,
+    mediaId,
+    7,
+  );
+
+  expect(protectedWrite).toHaveBeenCalledWith(
+    `/api/freelancer/projects/${projectId}/media/${mediaId}`,
+    'DELETE',
+    { version: 7 },
+  );
+});

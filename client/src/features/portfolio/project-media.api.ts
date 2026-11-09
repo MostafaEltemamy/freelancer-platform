@@ -87,6 +87,12 @@ export interface MediaOrderResponse {
   };
 }
 
+export interface DeleteProjectMediaResponse {
+  deleted: {
+    id: string;
+  };
+}
+
 function mediaPath(projectId: string): string {
   return (
     '/api/freelancer/projects/' +
@@ -234,6 +240,25 @@ export const projectMediaApi = {
       `${mediaPath(projectId)}/order`,
       'PUT',
       { items },
+    );
+  },
+  
+  /**
+   * Remove one owned media record using its current
+   * optimistic-concurrency version.
+   *
+   * The backend transaction removes metadata and
+   * enqueues storage cleanup; R2 deletion is asynchronous.
+   */
+  deleteImage(
+    projectId: string,
+    mediaId: string,
+    version: number,
+  ): Promise<DeleteProjectMediaResponse> {
+    return protectedWrite<DeleteProjectMediaResponse>(
+      mediaItemPath(projectId, mediaId),
+      'DELETE',
+      { version },
     );
   },
 };

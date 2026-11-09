@@ -108,7 +108,15 @@ function retryDelayMs(attempts: number): number {
 
 export async function processStorageDeletionBatch(
   maxItems = MAX_BATCH_SIZE,
+  options: {
+    onlyJobId?: string;
+
+    // Allows tests to simulate a storage outage.
+    // Production uses deleteStoredObject by default.
+    removeObject?: (key: string) => Promise<void>;
+  } = {},
 ): Promise<{
+
   claimed: number;
   deleted: number;
   failed: number;
@@ -122,12 +130,15 @@ export async function processStorageDeletionBatch(
   }
 
   const now = new Date();
-
   const dueJobs = await prisma.storageDeletionJob.findMany({
     where: {
+      ...(options.onlyJobId
+        ? { id: options.onlyJobId }
+        : {}),
       nextAttemptAt: {
         lte: now,
       },
+
       OR: [
         { leaseUntil: null },
         { leaseUntil: { lte: now } },
@@ -186,7 +197,9 @@ export async function processStorageDeletionBatch(
     try {
       // S3 DELETE is idempotent: an already missing
       // object is treated as successfully removed.
-      await deleteStoredObject(job.objectKey);
+      await (
+        options.removeObject ?? deleteStoredObject
+      )(job.objectKey);
 
       // Never erase a job newly leased by another
       // worker after our lease expired.
