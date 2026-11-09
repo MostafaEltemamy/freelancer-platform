@@ -1,39 +1,13 @@
 import { Router } from 'express';
-import type {
-  NextFunction,
-  Response,
-} from 'express';
-
+import type {NextFunction, Response} from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
-
-import {
-  requireSession,
-} from '../auth/require-session.js';
-
-import {
-  requireCsrf,
-} from '../auth/require-csrf.js';
-
-import {
-  projectIdSchema,
-} from './project.schemas.js';
-
-import {
-  PortfolioPublishedError,
-  PortfolioSetupRequiredError,
-} from './portfolio-guard.js';
-
-import {
-  mediaUploadIntentSchema,
-} from './project-media.policy.js';
-
-import {
-  MediaStorageError,
-  MediaUploadInvalidError,
-  MediaUploadMissingError,
-} from './project-media.storage.js';
-
+import {requireSession} from '../auth/require-session.js';
+import {requireCsrf} from '../auth/require-csrf.js';
+import {projectIdSchema} from './project.schemas.js';
+import {PortfolioPublishedError, PortfolioSetupRequiredError} from './portfolio-guard.js';
+import {mediaUploadIntentSchema} from './project-media.policy.js';
+import {MediaStorageError, MediaUploadInvalidError, MediaUploadMissingError} from './project-media.storage.js';
 import {
   prepareProjectImageUpload,
   finalizeProjectImageUpload,
@@ -43,6 +17,22 @@ import {
   MediaLimitError,
   MediaStateConflictError,
 } from './project-media.service.js';
+
+import {
+  updateMediaDetailsSchema,
+  setMediaCoverSchema,
+  reorderMediaSchema,
+} from './project-media.management.schemas.js';
+
+import {
+  updateMyMediaDetails,
+  setMyProjectCover,
+  reorderMyProjectMedia,
+  MediaGalleryNotFoundError,
+  MediaGalleryNotReadyError,
+  MediaGalleryVersionError,
+  MediaGalleryOrderError,
+} from './project-media.management.js';
 
 export const projectMediaRouter = Router();
 
@@ -121,6 +111,48 @@ function handleMediaError(
 
   next(error);
 }
+
+function handleGalleryError(
+  error: unknown,
+  res: Response,
+  next: NextFunction,
+): void {
+  if (error instanceof MediaGalleryNotFoundError) {
+    res.status(404).json({
+      error: 'Project image not found.',
+    });
+    return;
+  }
+
+  if (error instanceof MediaGalleryVersionError) {
+    res.status(409).json({
+      error: error.message,
+      code: 'STALE_MEDIA_VERSION',
+    });
+    return;
+  }
+
+  if (
+    error instanceof MediaGalleryNotReadyError ||
+    error instanceof MediaGalleryOrderError ||
+    error instanceof PortfolioPublishedError ||
+    error instanceof PortfolioSetupRequiredError
+  ) {
+    res.status(409).json({
+      error: error.message,
+    });
+    return;
+  }
+
+  next(error);
+}
+
+const galleryMutationLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: 100,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+});
 
 /**
  * GET /api/freelancer/projects/:projectId/media
@@ -249,6 +281,149 @@ projectMediaRouter.post(
       res.status(200).json({ media });
     } catch (error) {
       handleMediaError(error, res, next);
+    }
+  },
+);
+
+// ---------------------------------------------------------
+// PATCH /api/freelancer/projects/:projectId/media/
+//       :mediaId/details
+//
+// Edit the caption and alternative text of a READY image.
+// ---------------------------------------------------------
+
+projectMediaRouter.patch(
+  '/projects/:projectId/media/:mediaId/details',
+  requireCsrf,
+  galleryMutationLimiter,
+  async (req, res, next) => {
+    const projectId = projectIdSchema.safeParse(
+      req.params.projectId,
+    );
+
+    const mediaId = mediaIdSchema.safeParse(
+      req.params.mediaId,
+    );
+
+    const input = updateMediaDetailsSchema.safeParse(
+      req.body,
+    );
+
+    if (
+      !projectId.success ||
+      !mediaId.success ||
+      !input.success
+    ) {
+      res.status(400).json({
+        error:
+          'Please check the image description and try again.',
+      });
+      return;
+    }
+
+    try {
+      const media = await updateMyMediaDetails(
+        res.locals.authUser.id as string,
+        projectId.data,
+        mediaId.data,
+        input.data,
+      );
+
+      res.status(200).json({ media });
+    } catch (error) {
+      handleGalleryError(error, res, next);
+    }
+  },
+);
+
+// ---------------------------------------------------------
+// PUT /api/freelancer/projects/:projectId/media/order
+//
+// Reorder all READY gallery images atomically.
+// ---------------------------------------------------------
+
+projectMediaRouter.put(
+  '/projects/:projectId/media/order',
+  requireCsrf,
+  galleryMutationLimiter,
+  async (req, res, next) => {
+    const projectId = projectIdSchema.safeParse(
+      req.params.projectId,
+    );
+
+    const input = reorderMediaSchema.safeParse(
+      req.body,
+    );
+
+    if (!projectId.success || !input.success) {
+      res.status(400).json({
+        error:
+          'Invalid gallery order. Refresh your images and try again.',
+      });
+      return;
+    }
+
+    try {
+      const order = await reorderMyProjectMedia(
+        res.locals.authUser.id as string,
+        projectId.data,
+        input.data,
+      );
+
+      res.status(200).json({ order });
+    } catch (error) {
+      handleGalleryError(error, res, next);
+    }
+  },
+);
+
+// ---------------------------------------------------------
+// PUT /api/freelancer/projects/:projectId/media/
+//     :mediaId/cover
+//
+// Select one verified image as the project cover.
+// ---------------------------------------------------------
+
+projectMediaRouter.put(
+  '/projects/:projectId/media/:mediaId/cover',
+  requireCsrf,
+  galleryMutationLimiter,
+  async (req, res, next) => {
+    const projectId = projectIdSchema.safeParse(
+      req.params.projectId,
+    );
+
+    const mediaId = mediaIdSchema.safeParse(
+      req.params.mediaId,
+    );
+
+    const input = setMediaCoverSchema.safeParse(
+      req.body,
+    );
+
+    if (
+      !projectId.success ||
+      !mediaId.success ||
+      !input.success
+    ) {
+      res.status(400).json({
+        error:
+          'Invalid image selection. Refresh your gallery and try again.',
+      });
+      return;
+    }
+
+    try {
+      const media = await setMyProjectCover(
+        res.locals.authUser.id as string,
+        projectId.data,
+        mediaId.data,
+        input.data,
+      );
+
+      res.status(200).json({ media });
+    } catch (error) {
+      handleGalleryError(error, res, next);
     }
   },
 );
