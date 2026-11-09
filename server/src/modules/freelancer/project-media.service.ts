@@ -130,9 +130,14 @@ export async function prepareProjectImageUpload(
 
       return tx.projectMedia.create({
         data: {
-          projectId: project.id,
-          storageKey:
-            createProjectMediaStorageKey(input),
+          projectId: project.id,          
+          storageKey: createProjectMediaStorageKey(input),
+          // Reserve the future preview key immediately.
+          // This keeps deletion cleanup aware of the key
+          // even when image finalization is interrupted.
+          previewKey:
+            `projects/${input.projectId}/previews/` +
+            `${randomUUID()}.webp`,
           originalFilename: input.originalFilename,
           mimeType: input.mimeType,
           fileSizeBytes: input.fileSizeBytes,
@@ -280,6 +285,7 @@ export async function finalizeProjectImageUpload(
       id: true,
       projectId: true,
       storageKey: true,
+      previewKey: true,
       mimeType: true,
       fileSizeBytes: true,
       status: true,
@@ -331,8 +337,13 @@ export async function finalizeProjectImageUpload(
     media.mimeType,
   );
 
-  const previewKey =
-  `projects/${projectId}/previews/${randomUUID()}.webp`;
+  const previewKey = media.previewKey;
+  if (!previewKey) {
+    throw new MediaStateConflictError(
+      'This upload was created before the latest ' +
+      'media update. Please remove it and upload again.',
+    );
+  }
 
   // This preview is derived from independently validated
   // bytes, not from the browser's claimed file metadata.

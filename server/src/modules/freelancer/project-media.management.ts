@@ -1,11 +1,6 @@
-import type {
-  Prisma,
-} from '../../generated/prisma/client.js';
-
-import {
-  withEditablePortfolio,
-} from './portfolio-guard.js';
-
+import type {Prisma} from '../../generated/prisma/client.js';
+import {withEditablePortfolio} from './portfolio-guard.js';
+import {enqueueMediaObjectCleanup} from './storage-deletion.queue.js';
 import type {
   ReorderMediaInput,
   SetMediaCoverInput,
@@ -371,6 +366,78 @@ export async function reorderMyProjectMedia(
           version: item.version + 1,
           sortOrder: index,
         })),
+      };
+    },
+  );
+}
+
+// ---------------------------------------------------------
+// Remove one image and enqueue its private storage objects
+// for durable, retryable deletion.
+// ---------------------------------------------------------
+
+export async function deleteMyProjectMedia(
+  userId: string,
+  projectId: string,
+  mediaId: string,
+  expectedVersion: number,
+): Promise<{ id: string }> {
+  return withEditablePortfolio(
+    userId,
+    async (tx, profileId) => {
+      await requireOwnedProject(
+        tx,
+        profileId,
+        projectId,
+      );
+
+      const media = await tx.projectMedia.findFirst({
+        where: {
+          id: mediaId,
+          projectId,
+        },
+        select: {
+          id: true,
+          version: true,
+          storageKey: true,
+          previewKey: true,
+          createdAt: true,
+        },
+      });
+
+      if (!media) {
+        throw new MediaGalleryNotFoundError();
+      }
+
+      requireCurrentVersion(
+        media.version,
+        expectedVersion,
+      );
+
+      // Queue before deleting the row, within the SAME
+      // transaction. If the queue insert fails, the
+      // media row remains present.
+      await enqueueMediaObjectCleanup(
+        tx,
+        [media],
+      );
+
+      const deleted = await tx.projectMedia.deleteMany({
+        where: {
+          id: mediaId,
+          projectId,
+          version: expectedVersion,
+        },
+      });
+
+      if (deleted.count !== 1) {
+        throw new MediaGalleryVersionError();
+      }
+
+      // If this image was the cover, the project now has
+      // no cover. The freelancer selects a replacement.
+      return {
+        id: mediaId,
       };
     },
   );

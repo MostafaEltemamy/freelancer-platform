@@ -32,6 +32,10 @@ export const setMediaCoverSchema = z.strictObject({
   version: mediaVersionSchema,
 });
 
+export const deleteMediaSchema = z.strictObject({
+  version: mediaVersionSchema,
+});
+
 const versionedMediaItemSchema = z.strictObject({
   id: mediaIdSchema,
   version: mediaVersionSchema,

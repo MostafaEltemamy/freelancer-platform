@@ -22,6 +22,7 @@ import {
   updateMediaDetailsSchema,
   setMediaCoverSchema,
   reorderMediaSchema,
+  deleteMediaSchema,
 } from './project-media.management.schemas.js';
 
 import {
@@ -32,6 +33,7 @@ import {
   MediaGalleryNotReadyError,
   MediaGalleryVersionError,
   MediaGalleryOrderError,
+  deleteMyProjectMedia,
 } from './project-media.management.js';
 
 export const projectMediaRouter = Router();
@@ -422,6 +424,64 @@ projectMediaRouter.put(
       );
 
       res.status(200).json({ media });
+    } catch (error) {
+      handleGalleryError(error, res, next);
+    }
+  },
+);
+
+// ---------------------------------------------------------
+// DELETE /api/freelancer/projects/:projectId/media/:mediaId
+//
+// The request must provide the current image version.
+// The object-storage cleanup is queued transactionally.
+// ---------------------------------------------------------
+
+projectMediaRouter.delete(
+  '/projects/:projectId/media/:mediaId',
+  requireCsrf,
+  galleryMutationLimiter,
+  async (req, res, next) => {
+    const projectId = projectIdSchema.safeParse(
+      req.params.projectId,
+    );
+
+    const mediaId = mediaIdSchema.safeParse(
+      req.params.mediaId,
+    );
+
+    const input = deleteMediaSchema.safeParse(
+      req.body,
+    );
+
+    if (
+      !projectId.success ||
+      !mediaId.success ||
+      !input.success
+    ) {
+      res.status(400).json({
+        error:
+          'Please refresh your images and try again.',
+      });
+      return;
+    }
+
+    try {
+      const deleted = await deleteMyProjectMedia(
+        res.locals.authUser.id as string,
+        projectId.data,
+        mediaId.data,
+        input.data.version,
+      );
+
+      // Do not claim R2 objects are already gone.
+      // Only the DB deletion and cleanup reservation
+      // are completed at this point.
+      res.status(200).json({
+        deleted: {
+          id: deleted.id,
+        },
+      });
     } catch (error) {
       handleGalleryError(error, res, next);
     }

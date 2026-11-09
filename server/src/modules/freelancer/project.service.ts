@@ -2,12 +2,8 @@ import { prisma } from '../../database/prisma.js';
 import type {Prisma} from '../../generated/prisma/client.js';
 import {withEditablePortfolio} from './portfolio-guard.js';
 import {emptyProjectContent} from './project-content.schemas.js';
-
-import type {
-  CreateProjectInput,
-  UpdateProjectInput,
-  ReorderProjectsInput,
-} from './project.schemas.js';
+import {enqueueMediaObjectCleanup} from './storage-deletion.queue.js';
+import type {CreateProjectInput, UpdateProjectInput, ReorderProjectsInput} from './project.schemas.js';
 
 const MAX_PROJECTS = 100;
 
@@ -374,6 +370,27 @@ export async function deleteMyProject(
       if (existing.version !== expectedVersion) {
         throw new ProjectVersionConflictError();
       }
+
+      // Collect every object before the database cascade
+      // removes the media rows.
+      const mediaToCleanup =
+        await tx.projectMedia.findMany({
+          where: {
+            projectId,
+          },
+          select: {
+            storageKey: true,
+            previewKey: true,
+            createdAt: true,
+          },
+        });
+
+      // The cleanup jobs and project deletion commit or
+      // roll back together.
+      await enqueueMediaObjectCleanup(
+        tx,
+        mediaToCleanup,
+      );
 
       const deleted =
         await tx.portfolioProject.deleteMany({
