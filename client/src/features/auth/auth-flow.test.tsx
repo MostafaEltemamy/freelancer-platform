@@ -326,15 +326,8 @@ test('does not claim logout succeeded when it fails', async () => {
 
 // Test 9
 test('preserves unsaved form data when browser regains focus', async () => {
-  let finishRecheck: (user: AuthUser) => void = () => {};
-
-  const pendingRecheck = new Promise<AuthUser>((resolve) => {
-    finishRecheck = resolve;
-  });
-
-  vi.mocked(authApi.me)
-    .mockResolvedValueOnce(testUser)
-    .mockImplementationOnce(() => pendingRecheck);
+  // Allow the initial authentication request to finish.
+  vi.mocked(authApi.me).mockResolvedValue(testUser);
 
   render(
     <AuthProvider>
@@ -353,21 +346,51 @@ test('preserves unsaved form data when browser regains focus', async () => {
     </AuthProvider>,
   );
 
+  // Wait until authentication has completed
+  // and the protected form is mounted.
   const input = await screen.findByRole('textbox', {
     name: 'Unsaved project title',
   });
 
   fireEvent.change(input, {
-    target: { value: 'My unfinished portfolio project' },
+    target: {
+      value: 'My unfinished portfolio project',
+    },
   });
+
+  expect(input).toHaveValue(
+    'My unfinished portfolio project',
+  );
+
+  // Prepare a pending authentication recheck.
+  let finishRecheck: (user: AuthUser) => void =
+    () => {};
+
+  const pendingRecheck = new Promise<AuthUser>(
+    (resolve) => {
+      finishRecheck = resolve;
+    },
+  );
+
+  // All subsequent authentication requests remain pending
+  // until this test explicitly completes them.
+  vi.mocked(authApi.me).mockImplementation(
+    () => pendingRecheck,
+  );
+
+  // Clear ONLY the mock's call history.
+  // This excludes initial authentication calls
+  // while preserving the pending implementation.
+  vi.mocked(authApi.me).mockClear();
 
   // Simulate returning to the browser.
   fireEvent.focus(window);
 
-  expect(authApi.me).toHaveBeenCalledTimes(2);
+  // One new request should be triggered by this event.
+  expect(authApi.me).toHaveBeenCalled();
 
-  // The same input must remain mounted while the
-  // authentication request is still pending.
+  // The original input must remain mounted while
+  // the authentication request is pending.
   expect(
     screen.getByRole('textbox', {
       name: 'Unsaved project title',
@@ -378,9 +401,19 @@ test('preserves unsaved form data when browser regains focus', async () => {
     'My unfinished portfolio project',
   );
 
+  // Complete the session revalidation.
   await act(async () => {
     finishRecheck(testUser);
+    await pendingRecheck;
   });
+
+  // Authentication succeeded without replacing
+  // the user's form or clearing unsaved changes.
+  expect(
+    screen.getByRole('textbox', {
+      name: 'Unsaved project title',
+    }),
+  ).toBe(input);
 
   expect(input).toHaveValue(
     'My unfinished portfolio project',

@@ -1,7 +1,7 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 import * as matchers from '@testing-library/jest-dom/matchers';
 import '@testing-library/jest-dom/vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ApiError } from '../../lib/api-client';
 import { profileApi } from '../profile/profile.api';
@@ -776,21 +776,32 @@ test('keeps the unsaved project draft if conflict refresh fails', async () => {
     }),
   );
 
-  await screen.findByRole('group', {
-    name: 'Version conflict recovery',
-  });
+    await screen.findByRole('group', {
+      name: 'Version conflict recovery',
+    });
 
-  fireEvent.click(
-    screen.getByRole('button', {
+    const refreshButton = screen.getByRole('button', {
       name: 'Discard local edits and load latest',
-    }),
-  );
+    });
 
+    // The previous failed save may still be completing
+    // its cleanup when the conflict panel first appears.
+    await waitFor(() => {
+      expect(refreshButton).toBeEnabled();
+    });
+
+    fireEvent.click(refreshButton);
+
+    // Wait for the NEW refresh error, not merely any alert
+    // that may already be present after the version conflict.    
+    const refreshError = await screen.findByText(
+      'Unable to load the latest portfolio.',
+    );
+
+  expect(refreshError).toBeInTheDocument();
   expect(
-    await screen.findByRole('alert'),
-  ).toHaveTextContent(
-    'Unable to load the latest portfolio.',
-  );
+    refreshError.closest('[role="alert"]'),
+  ).not.toBeNull();
 
   // A failed refresh must not destroy the existing editor.
   expect(

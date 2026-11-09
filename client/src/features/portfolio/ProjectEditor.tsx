@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { ProjectContentBuilder } from './ProjectContentBuilder';
+import { ProjectImageManager } from './ProjectImageManager';
 import { cleanProjectContent } from './project-content.utils';
 import type {ProjectContent} from './portfolio.types';
 
@@ -57,6 +58,7 @@ export function ProjectEditor({
 }: Props) {
   const [form, setForm] = useState<FormData>(() => initialForm(project));
   const [error, setError] = useState<string | null>(null);
+  const [mediaBusy, setMediaBusy] = useState(false);
 
   const [content, setContent] = useState<ProjectContent>(
     () => project?.content ?? {
@@ -75,7 +77,7 @@ export function ProjectEditor({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy) return;
+    if (busy || mediaBusy) return;
 
     const slug = form.slug.trim().toLowerCase();
     const title = form.title.trim();
@@ -335,19 +337,41 @@ export function ProjectEditor({
           }}
         />
 
+        {project ? (
+          <ProjectImageManager
+            key={project.id}
+            projectId={project.id}
+            disabled={busy}
+            onActivityChange={setMediaBusy}
+          />
+
+        ) : (
+          <p className="profile-help">
+            Save your new project first. Then reopen it
+            to upload images and build your gallery.
+          </p>
+        )}
+
+        /* Save and Cancel buttons go here */
         <div className="onboarding-actions">
           <button
             type="submit"
             className="primary-button"
-            disabled={busy}
+            disabled={busy || mediaBusy}
           >
-            {busy ? 'Saving…' : project ? 'Save project' : 'Create project'}
+            {mediaBusy
+              ? 'Uploading image…'
+              : busy
+                ? 'Saving…'
+                : project
+                  ? 'Save project'
+                  : 'Create project'}
           </button>
 
           <button
             type="button"
             className="secondary-button"
-            disabled={busy}
+            disabled={busy || mediaBusy}
             onClick={onCancel}
           >
             Cancel

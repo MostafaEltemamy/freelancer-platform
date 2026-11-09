@@ -1,4 +1,3 @@
-
 import {
   useCallback,
   useEffect,
@@ -143,6 +142,36 @@ export function AuthProvider({
       }
     }
   }, []);
+  
+  // Revalidate an existing session when the browser regains
+  // focus, without unmounting the current authenticated page.
+  //
+  // Ignore repeated focus events while one recheck is running.
+  const focusRecheckInFlight = useRef(false);
+
+  useEffect(() => {
+    if (state.status !== 'authenticated') {
+      return;
+    }
+
+    function handleWindowFocus() {
+      if (focusRecheckInFlight.current) {
+        return;
+      }
+
+      focusRecheckInFlight.current = true;
+
+      void refresh().finally(() => {
+        focusRecheckInFlight.current = false;
+      });
+    }
+
+    window.addEventListener('focus', handleWindowFocus);
+
+    return () => {
+      window.removeEventListener('focus', handleWindowFocus);
+    };
+  }, [refresh, state.status]);
 
   // Authenticate an existing account.
   const login = useCallback(
