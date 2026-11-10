@@ -95,7 +95,7 @@ export async function reconcileAbandonedProjectMedia(
         : {}),
 
       status: {
-        in: ['PENDING', 'FAILED'],
+        in: ['PENDING', 'FINALIZING', 'FAILED'],
       },
       createdAt: {
         lte: expiredBefore,
@@ -138,7 +138,7 @@ export async function reconcileAbandonedProjectMedia(
               : {}),
             version: candidate.version,
             status: {
-              in: ['PENDING', 'FAILED'],
+              in: ['PENDING', 'FINALIZING', 'FAILED'],
             },
             createdAt: {
               lte: expiredBefore,

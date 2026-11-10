@@ -11,6 +11,7 @@ async function main(): Promise<void> {
 
   const [
     pendingUploads,
+    finalizingUploads,
     expiredUploads,
     failedUploads,
     queuedDeletions,
@@ -18,16 +19,25 @@ async function main(): Promise<void> {
     repeatedFailures,
     oldestJob,
   ] = await Promise.all([
+    // 1. Pending uploads
     prisma.projectMedia.count({
       where: {
         status: 'PENDING',
       },
     }),
 
+    // 2. Currently finalizing uploads
+    prisma.projectMedia.count({
+      where: {
+        status: 'FINALIZING',
+      },
+    }),
+
+    // 3. Abandoned uploads eligible for reconciliation
     prisma.projectMedia.count({
       where: {
         status: {
-          in: ['PENDING', 'FAILED'],
+          in: ['PENDING', 'FINALIZING', 'FAILED'],
         },
         createdAt: {
           lte: expiredBefore,
@@ -38,14 +48,17 @@ async function main(): Promise<void> {
       },
     }),
 
+    // 4. Failed uploads
     prisma.projectMedia.count({
       where: {
         status: 'FAILED',
       },
     }),
 
+    // 5. All queued storage deletions
     prisma.storageDeletionJob.count(),
 
+    // 6. Deletion jobs due for processing
     prisma.storageDeletionJob.count({
       where: {
         nextAttemptAt: {
@@ -54,6 +67,7 @@ async function main(): Promise<void> {
       },
     }),
 
+    // 7. Jobs that have failed repeatedly
     prisma.storageDeletionJob.count({
       where: {
         attempts: {
@@ -62,6 +76,7 @@ async function main(): Promise<void> {
       },
     }),
 
+    // 8. Oldest pending cleanup job
     prisma.storageDeletionJob.findFirst({
       select: {
         createdAt: true,
@@ -74,9 +89,10 @@ async function main(): Promise<void> {
 
   const oldestCleanupAgeMinutes = oldestJob
     ? Math.floor(
-        (now.getTime() -
-          oldestJob.createdAt.getTime()) /
-          60_000,
+        (
+          now.getTime() -
+          oldestJob.createdAt.getTime()
+        ) / 60_000,
       )
     : null;
 
@@ -87,6 +103,7 @@ async function main(): Promise<void> {
 
         media: {
           pendingUploads,
+          finalizingUploads,
           expiredUploads,
           failedUploads,
         },

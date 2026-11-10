@@ -1,5 +1,6 @@
 export type MediaStatus =
   | 'PENDING'
+  | 'FINALIZING'
   | 'READY'
   | 'FAILED';
 
@@ -64,6 +65,7 @@ export interface ReferenceAuditReport {
   };
 
   pendingRecords: number;
+  finalizingRecords: number;
   failedRecords: number;
 }
 
@@ -146,6 +148,7 @@ export async function auditMediaReferences(
     },
 
     pendingRecords: 0,
+    finalizingRecords: 0,
     failedRecords: 0,
   };
 
@@ -193,6 +196,11 @@ export async function auditMediaReferences(
 
       if (record.status === 'FAILED') {
         report.failedRecords++;
+        continue;
+      }
+
+      if (record.status === 'FINALIZING') {
+        report.finalizingRecords++;
         continue;
       }
 
