@@ -1,30 +1,17 @@
-
-import { Router } from 'express';
-import { rateLimit } from 'express-rate-limit';
-
-import { registrationSchema } from './auth.schemas.js';
-import {
-  DuplicateEmailError,
-  registerUser,
-} from './auth.service.js';
-
-import { loginSchema } from './auth.schemas.js';
-
-import {
-  InvalidCredentialsError,
-  loginUser,
-} from './auth.login.service.js';
-
-import {
-  SESSION_COOKIE_NAME,
-  SESSION_COOKIE_OPTIONS,
-  SESSION_COOKIE_CLEAR_OPTIONS,
-} from './session-cookie.js';
-
-import { requireSession } from './require-session.js';
-import { revokeSessionToken } from './auth.logout.service.js';
-import { createCsrfToken } from './csrf-tokens.js';
-import { requireLogoutCsrf } from './require-csrf.js';
+import {Router} from 'express';
+import {rateLimit} from 'express-rate-limit';
+import {registrationSchema} from './auth.schemas.js';
+import {DuplicateEmailError, registerUser} from './auth.service.js';
+import {loginSchema} from './auth.schemas.js';
+import {InvalidCredentialsError, loginUser} from './auth.login.service.js';
+import {SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS, SESSION_COOKIE_CLEAR_OPTIONS} from './session-cookie.js';
+import {requireSession} from './require-session.js';
+import {revokeSessionToken} from './auth.logout.service.js';
+import {createCsrfToken} from './csrf-tokens.js';
+import {requireCsrf, requireLogoutCsrf} from './require-csrf.js';
+import {deleteAccountSchema} from './account-deletion.schemas.js';
+import {deleteMyAccount, InvalidDeletionCredentialsError, AccountDeletionSessionError} from './account-deletion.service.js';
+import {hashSessionToken} from './session-tokens.js';
 
 export const authRouter = Router();
 
@@ -194,3 +181,96 @@ authRouter.post('/logout', requireLogoutCsrf, async (req, res, next) => {
     next(error);
   }
 });
+
+// ---------------------------------------------------------
+// DELETE /api/auth/account
+//
+// Irreversible account removal.
+//
+// Security:
+// - authenticated session
+// - CSRF protection
+// - current password verification
+// - exact confirmation phrase
+// - bounded request rate
+// ---------------------------------------------------------
+
+const accountDeletionLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: 10,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+});
+
+authRouter.delete(
+  '/account',
+  requireSession,
+  requireCsrf,
+  accountDeletionLimiter,
+  async (req, res, next) => {
+    const parsed = deleteAccountSchema.safeParse(
+      req.body,
+    );
+
+    if (!parsed.success) {
+      res.status(400).json({
+        error:
+          'Current password and the exact confirmation ' +
+          'phrase are required.',
+      });
+      return;
+    }
+
+    const rawToken: unknown =
+      req.cookies?.[SESSION_COOKIE_NAME];
+
+    if (typeof rawToken !== 'string') {
+      res.status(401).json({
+        error: 'Authentication required.',
+      });
+      return;
+    }
+
+    try {
+      const userId =
+        res.locals.authUser.id as string;
+
+      await deleteMyAccount(
+        userId,
+        parsed.data.password,
+        hashSessionToken(rawToken),
+      );
+
+      // All sessions were removed by the account cascade.
+      // Clear the current browser's cookie too.
+      res.clearCookie(
+        SESSION_COOKIE_NAME,
+        SESSION_COOKIE_CLEAR_OPTIONS,
+      );
+
+      res.setHeader('Cache-Control', 'no-store');
+      res.status(204).end();
+    } catch (error) {
+      if (
+        error instanceof
+        InvalidDeletionCredentialsError
+      ) {
+        res.status(401).json({
+          error: error.message,
+        });
+        return;
+      }
+
+      if (
+        error instanceof AccountDeletionSessionError
+      ) {
+        res.status(401).json({
+          error: error.message,
+        });
+        return;
+      }
+
+      next(error);
+    }
+  },
+);
