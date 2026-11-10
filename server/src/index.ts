@@ -1,7 +1,9 @@
-import { app } from './app.js';
-import { prisma } from './database/prisma.js';
+import {app} from './app.js';
+import {prisma} from './database/prisma.js';
 import {startStorageDeletionWorker} from './modules/freelancer/storage-deletion.queue.js';
 import {startMediaReconciliationWorker} from './modules/freelancer/project-media.reconciliation.js';
+import {startMediaHealthMonitor} from './modules/freelancer/media-health.monitor.js';
+
 const port = Number(process.env.PORT ?? 5001);
 
 if (
@@ -37,7 +39,10 @@ const stopStorageDeletionWorker =
   startStorageDeletionWorker();
 
 const stopMediaReconciliationWorker =
-startMediaReconciliationWorker();
+  startMediaReconciliationWorker();
+
+const stopMediaHealthMonitor =
+  startMediaHealthMonitor();
 
 let shuttingDown = false;
 
@@ -80,6 +85,7 @@ function shutdown(signal: string): void {
       await Promise.all([
         stopStorageDeletionWorker(),
         stopMediaReconciliationWorker(),
+        stopMediaHealthMonitor(),
       ]);
 
       await prisma.$disconnect();
