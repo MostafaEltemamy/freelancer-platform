@@ -240,6 +240,11 @@ model ProjectMedia {
   @@map("project_media")
 }
 
+enum StorageDeletionPhase {
+  DELETE
+  VERIFY
+}
+
 /// Durable outbox for deleting private object-storage files.
 ///
 /// This table intentionally has no foreign key to projects,
@@ -254,6 +259,17 @@ model StorageDeletionJob {
   nextAttemptAt DateTime @default(now()) @map("next_attempt_at") @db.Timestamptz(3)
 
   attempts Int @default(0)
+  
+  // DELETE -> VERIFY -> completed removal.
+  phase StorageDeletionPhase @default(DELETE)
+
+  // 0 = first verification pending.
+  // 1 = final verification pending.
+  verificationPasses Int @default(0) @map("verification_passes")
+
+  // Counts consecutive operational failures.
+  // Successful phase transitions reset it.
+  consecutiveFailures Int @default(0) @map("consecutive_failures")
 
   /// Prevent concurrent workers from claiming the same job.
   leaseToken String? @map("lease_token") @db.Uuid

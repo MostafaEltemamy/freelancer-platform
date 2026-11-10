@@ -4,6 +4,7 @@ import {
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
+  ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 
 import {getSignedUrl} from '@aws-sdk/s3-request-presigner';
@@ -44,6 +45,8 @@ export class MediaStorageTimeoutError
 const MEDIA_READ_DEADLINE_MS = 60_000;
 const PREVIEW_WRITE_DEADLINE_MS = 20_000;
 const PREVIEW_VERIFY_DEADLINE_MS = 8_000;
+const STORAGE_DELETE_DEADLINE_MS = 20_000;
+const STORAGE_EXISTENCE_DEADLINE_MS = 8_000;
 
 async function boundedStorage<T>(
   durationMs: number,
@@ -632,23 +635,94 @@ export async function writeImagePreview(
 // ---------------------------------------------------------
 
 /**
- * Delete an object by its server-generated storage key.
+ * Check object existence without downloading its bytes.
  *
- * This will be used by:
- * - Image removal
- * - Failed upload cleanup
- * - Abandoned upload reconciliation
- * - Project deletion cleanup
+ * Only an explicitly recognized missing-object 404 is
+ * considered absence.
  *
- * Deleting a missing S3 object is normally idempotent.
+ * AccessDenied, NoSuchBucket, timeouts, throttling and
+ * server failures are never classified as missing.
  */
-export async function deleteStoredObject(
+export async function storedObjectExists(
+  key: string,
+): Promise<boolean> {
+  try {
+    await boundedStorage(
+      STORAGE_EXISTENCE_DEADLINE_MS,
+      (signal) =>
+        client().send(
+          new HeadObjectCommand({
+            Bucket: bucket(),
+            Key: key,
+          }),
+          { abortSignal: signal },
+        ),
+    );
+
+    return true;
+  } catch (error) {
+    const failure = error as {
+      name?: string;
+      $metadata?: {
+        httpStatusCode?: number;
+      };
+    };
+
+    const recognizedMissing = [
+      'NotFound',
+      'NoSuchKey',
+      'NotFoundException',
+    ].includes(failure?.name ?? '');
+
+    if (
+      failure?.$metadata?.httpStatusCode === 404 &&
+      recognizedMissing
+    ) {
+      // A HEAD response may not distinguish an absent
+      // object from an unavailable bucket in every case.
+      //
+      // Confirm the bucket can be listed before accepting
+      // the object as absent.
+      await boundedStorage(
+        STORAGE_EXISTENCE_DEADLINE_MS,
+        async (signal) => {
+          await client().send(
+            new ListObjectsV2Command({
+              Bucket: bucket(),
+              Prefix: 'projects/',
+              MaxKeys: 1,
+            }),
+            { abortSignal: signal },
+          );
+        },
+      );
+
+      return false;
+    }
+
+    throw error;
+  }
+}
+
+/**
+ * Bounded, idempotent removal of one private object.
+ *
+ * A timeout means the outcome is unknown, so the
+ * durable worker must retry instead of deleting the job.
+ */
+export function deleteStoredObject(
   key: string,
 ): Promise<void> {
-  await client().send(
-    new DeleteObjectCommand({
-      Bucket: bucket(),
-      Key: key,
-    }),
+  return boundedStorage(
+    STORAGE_DELETE_DEADLINE_MS,
+    async (signal) => {
+      await client().send(
+        new DeleteObjectCommand({
+          Bucket: bucket(),
+          Key: key,
+        }),
+        { abortSignal: signal },
+      );
+    },
   );
 }

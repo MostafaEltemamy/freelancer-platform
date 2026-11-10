@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { prisma } from '../src/database/prisma.js';
+import {prisma} from '../src/database/prisma.js';
 import {ABANDONED_MEDIA_AGE_MS} from '../src/modules/freelancer/project-media.reconciliation.js';
 
 async function main(): Promise<void> {
@@ -14,76 +14,80 @@ async function main(): Promise<void> {
     finalizingUploads,
     expiredUploads,
     failedUploads,
+
     queuedDeletions,
+    deletionPhaseJobs,
+    verificationPhaseJobs,
+    finalVerificationJobs,
     dueDeletions,
+    dueVerifications,
     repeatedFailures,
     oldestJob,
   ] = await Promise.all([
-    // 1. Pending uploads
     prisma.projectMedia.count({
-      where: {
-        status: 'PENDING',
-      },
+      where: { status: 'PENDING' },
     }),
 
-    // 2. Currently finalizing uploads
     prisma.projectMedia.count({
-      where: {
-        status: 'FINALIZING',
-      },
+      where: { status: 'FINALIZING' },
     }),
 
-    // 3. Abandoned uploads eligible for reconciliation
     prisma.projectMedia.count({
       where: {
         status: {
           in: ['PENDING', 'FINALIZING', 'FAILED'],
         },
-        createdAt: {
-          lte: expiredBefore,
-        },
-        updatedAt: {
-          lte: expiredBefore,
-        },
+        createdAt: { lte: expiredBefore },
+        updatedAt: { lte: expiredBefore },
       },
     }),
 
-    // 4. Failed uploads
     prisma.projectMedia.count({
-      where: {
-        status: 'FAILED',
-      },
+      where: { status: 'FAILED' },
     }),
 
-    // 5. All queued storage deletions
+    // All outstanding deletion and verification jobs.
     prisma.storageDeletionJob.count(),
 
-    // 6. Deletion jobs due for processing
+    prisma.storageDeletionJob.count({
+      where: { phase: 'DELETE' },
+    }),
+
+    prisma.storageDeletionJob.count({
+      where: { phase: 'VERIFY' },
+    }),
+
     prisma.storageDeletionJob.count({
       where: {
-        nextAttemptAt: {
-          lte: now,
-        },
+        phase: 'VERIFY',
+        verificationPasses: 1,
       },
     }),
 
-    // 7. Jobs that have failed repeatedly
     prisma.storageDeletionJob.count({
       where: {
-        attempts: {
-          gte: 3,
-        },
+        phase: 'DELETE',
+        nextAttemptAt: { lte: now },
       },
     }),
 
-    // 8. Oldest pending cleanup job
+    prisma.storageDeletionJob.count({
+      where: {
+        phase: 'VERIFY',
+        nextAttemptAt: { lte: now },
+      },
+    }),
+
+    // Consecutive errors, not total worker claims.
+    prisma.storageDeletionJob.count({
+      where: {
+        consecutiveFailures: { gte: 3 },
+      },
+    }),
+
     prisma.storageDeletionJob.findFirst({
-      select: {
-        createdAt: true,
-      },
-      orderBy: {
-        createdAt: 'asc',
-      },
+      select: { createdAt: true },
+      orderBy: { createdAt: 'asc' },
     }),
   ]);
 
@@ -110,7 +114,11 @@ async function main(): Promise<void> {
 
         storageCleanup: {
           queuedDeletions,
+          deletionPhaseJobs,
+          verificationPhaseJobs,
+          finalVerificationJobs,
           dueDeletions,
+          dueVerifications,
           repeatedFailures,
           oldestCleanupAgeMinutes,
         },

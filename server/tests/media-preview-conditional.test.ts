@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import sharp from 'sharp';
-import {deleteStoredObject, MediaUploadInvalidError, presignImagePreview, writeImagePreview} from '../src/modules/freelancer/project-media.storage.js';
+import {deleteStoredObject, MediaUploadInvalidError, presignImagePreview, writeImagePreview, storedObjectExists} from '../src/modules/freelancer/project-media.storage.js';
 
 const ENABLED =
   process.env.MEDIA_E2E_TESTS === '1';
@@ -57,8 +57,17 @@ test(
     }).webp().toBuffer();
 
     try {
+      assert.equal(
+        await storedObjectExists(key),
+        false,
+      );
       // First creation.
       await writeImagePreview(key, original);
+
+      assert.equal(
+        await storedObjectExists(key),
+        true,
+      );
 
       // Exact same bytes should verify successfully.
       await writeImagePreview(key, original);
@@ -87,6 +96,10 @@ test(
     } finally {
       // Remove only this test-generated object.
       await deleteStoredObject(key);
+      assert.equal(
+        await storedObjectExists(key),
+        false,
+      );
     }
   },
 );
