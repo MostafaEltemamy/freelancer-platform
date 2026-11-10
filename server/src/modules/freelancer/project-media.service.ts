@@ -1,21 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../../database/prisma.js';
-
-import {
-  withEditablePortfolio,
-  PortfolioPublishedError,
-} from './portfolio-guard.js';
-
-import {
-  classifyMedia,
-  createProjectMediaStorageKey,
-  PROJECT_MEDIA_LIMITS,
-} from './project-media.policy.js';
-
-import type {
-  MediaUploadIntent,
-} from './project-media.policy.js';
-
+import {withEditablePortfolio, PortfolioPublishedError} from './portfolio-guard.js';
+import {classifyMedia, createProjectMediaStorageKey, PROJECT_MEDIA_LIMITS} from './project-media.policy.js';
+import type {MediaUploadIntent} from './project-media.policy.js';
 import {
   MediaUploadInvalidError,
   presignImageUpload,
@@ -23,11 +10,11 @@ import {
   readUploadedImage,
   uploadExpirySeconds,
   writeImagePreview,
+  MediaStorageTimeoutError,
 } from './project-media.storage.js';
 
-import {
-  processProjectImage,
-} from './project-media.image.js';
+import {processProjectImage} from './project-media.image.js';
+import {withLockedProfile} from './profile-lock.js';
 
 export const PENDING_LIFETIME_MS = 15 * 60_000;
 
@@ -252,10 +239,19 @@ export async function listMyProjectMedia(
           ? await presignImagePreview(previewKey)
           : null;
 
-      return {
-        ...media,
-        previewUrl,
-      };
+  return {
+    ...media,
+
+    // FINALIZING is internal. Existing clients continue
+    // to understand PENDING, READY and FAILED.
+    status:
+      media.status === 'FINALIZING'
+        ? 'PENDING' as const
+        : media.status,
+
+    previewUrl,
+  };
+
     }),
   );
 }
@@ -267,138 +263,279 @@ export async function listMyProjectMedia(
  * The owner's DRAFT status is checked again atomically
  * before the final READY transition.
  */
+
+/**
+ * Internal dependency interface.
+ *
+ * Production uses the real R2 and Sharp functions.
+ * Tests inject controlled implementations so race
+ * conditions can be reproduced without accessing R2.
+ */
+export interface ImageFinalizationIO {
+  readUploadedImage: typeof readUploadedImage;
+  processProjectImage: typeof processProjectImage;
+  writeImagePreview: typeof writeImagePreview;
+}
+
+/**
+ * Claim one PENDING upload before storage processing.
+ *
+ * The profile lock serializes this claim with project
+ * deletion, publication and account deletion.
+ *
+ * No network I/O takes place inside this transaction.
+ */
 export async function finalizeProjectImageUpload(
   userId: string,
   projectId: string,
   mediaId: string,
+  io: ImageFinalizationIO = {
+    readUploadedImage,
+    processProjectImage,
+    writeImagePreview,
+  },
 ) {
-  const media = await prisma.projectMedia.findFirst({
-    where: {
-      id: mediaId,
-      projectId,
-      project: {
-        profile: { userId },
-      },
-    },
+  const media = await withLockedProfile(
+    userId,
+    async (tx, profile) => {
+      if (!profile) {
+        throw new MediaNotFoundError();
+      }
 
-    select: {
-      id: true,
-      projectId: true,
-      storageKey: true,
-      previewKey: true,
-      mimeType: true,
-      fileSizeBytes: true,
-      status: true,
-      kind: true,
-      version: true,
-      createdAt: true,
+      if (profile.status !== 'DRAFT') {
+        throw new PortfolioPublishedError();
+      }
 
-      project: {
-        select: {
-          profile: {
-            select: {
-              status: true,
+      const existing =
+        await tx.projectMedia.findFirst({
+          where: {
+            id: mediaId,
+            projectId,
+            project: {
+              profileId: profile.id,
             },
           },
-        },
-      },
+          select: {
+            id: true,
+            projectId: true,
+            storageKey: true,
+            previewKey: true,
+            mimeType: true,
+            fileSizeBytes: true,
+            status: true,
+            kind: true,
+            version: true,
+            createdAt: true,
+          },
+        });
+
+      if (!existing) {
+        throw new MediaNotFoundError();
+      }
+
+      if (
+        existing.status !== 'PENDING' ||
+        existing.kind !== 'IMAGE'
+      ) {
+        throw new MediaStateConflictError(
+          'This image is already processing or completed.',
+        );
+      }
+
+      if (
+        Date.now() - existing.createdAt.getTime() >
+        PENDING_LIFETIME_MS
+      ) {
+        throw new MediaStateConflictError(
+          'This upload session expired. ' +
+          'Please start a new upload.',
+        );
+      }
+
+      if (!existing.previewKey) {
+        throw new MediaStateConflictError(
+          'This upload is missing its reserved preview. ' +
+          'Please remove it and upload again.',
+        );
+      }
+
+      // Exactly one completion request wins the claim.
+      //
+      // Do not increment the externally visible media
+      // version yet. The READY transition will perform
+      // the usual 1 -> 2 increment.
+      const claimed =
+        await tx.projectMedia.updateMany({
+          where: {
+            id: existing.id,
+            projectId,
+            status: 'PENDING',
+            version: existing.version,
+          },
+          data: {
+            status: 'FINALIZING',
+          },
+        });
+
+      if (claimed.count !== 1) {
+        throw new MediaStateConflictError(
+          'This image is already being processed.',
+        );
+      }
+
+      return existing;
     },
-  });
+  );
 
-  if (!media) {
-    throw new MediaNotFoundError();
-  }
-
-  if (media.project.profile.status !== 'DRAFT') {
-    throw new PortfolioPublishedError();
-  }
-
-  if (media.status !== 'PENDING' || media.kind !== 'IMAGE') {
-    throw new MediaStateConflictError();
-  }
-
-  if (
-    Date.now() - media.createdAt.getTime() >
-    PENDING_LIFETIME_MS
-  ) {
-    throw new MediaStateConflictError(
-      'This upload session expired. Please start a new upload.',
+  // The claim transaction has committed. The profile
+  // and media row locks have now been released.
+  //
+  // Expensive work must happen outside the transaction.
+  let previewWriteStarted = false;
+  try {
+    const source = await io.readUploadedImage(
+      media.storageKey,
+      media.fileSizeBytes,
+      media.mimeType,
     );
-  }
 
-  const source = await readUploadedImage(
-    media.storageKey,
-    media.fileSizeBytes,
-    media.mimeType,
-  );
-
-  const processed = await processProjectImage(
-    source,
-    media.mimeType,
-  );
-
-  const previewKey = media.previewKey;
-  if (!previewKey) {
-    throw new MediaStateConflictError(
-      'This upload was created before the latest ' +
-      'media update. Please remove it and upload again.',
+    const processed = await io.processProjectImage(
+      source,
+      media.mimeType,
     );
-  }
 
-  // This preview is derived from independently validated
-  // bytes, not from the browser's claimed file metadata.
-  await writeImagePreview(
-    previewKey,
-    processed.buffer,
-  );
+    // The preview key was reserved when this upload
+    // was created, before any browser received a URL.
+    const previewKey = media.previewKey!;
 
-  // Re-check ownership and publication while holding the
-  // same profile lock used by the rest of the portfolio.
-  // A failed transaction leaves the preview private and
-  // eligible for later orphan cleanup.
-  return withEditablePortfolio(
-    userId,
-    async (tx, profileId) => {
-      const project = await tx.portfolioProject.findFirst({
+    // Recheck that the upload is still claimed and
+    // owned before starting an R2 preview write.
+    //
+    // This reduces unnecessary writes if a project
+    // was deleted during image processing.
+    const stillExists =
+      await prisma.projectMedia.findFirst({
         where: {
-          id: projectId,
-          profileId,
+          id: media.id,
+          projectId,
+          version: media.version,
+          status: 'FINALIZING',
+          project: {
+            profile: { userId },
+          },
         },
         select: { id: true },
       });
 
-      if (!project) {
-        throw new MediaProjectNotFoundError();
-      }
+    if (!stillExists) {
+      throw new MediaStateConflictError(
+        'This upload was removed during processing.',
+      );
+    }
 
-      const updated = await tx.projectMedia.updateMany({
+    previewWriteStarted = true;
+
+    await io.writeImagePreview(
+      previewKey,
+      processed.buffer,
+    );
+
+    // Atomically verify ownership and publication again.
+    // A deleted project/account cannot become READY.
+    return await withEditablePortfolio(
+      userId,
+      async (tx, profileId) => {
+        const project =
+          await tx.portfolioProject.findFirst({
+            where: {
+              id: projectId,
+              profileId,
+            },
+            select: { id: true },
+          });
+
+        if (!project) {
+          throw new MediaProjectNotFoundError();
+        }
+
+        const updated =
+          await tx.projectMedia.updateMany({
+            where: {
+              id: media.id,
+              projectId,
+              status: 'FINALIZING',
+              version: media.version,
+            },
+            data: {
+              status: 'READY',
+              previewKey,
+              width: processed.width,
+              height: processed.height,
+              readyAt: new Date(),
+              version: { increment: 1 },
+            },
+          });
+
+        if (updated.count !== 1) {
+          throw new MediaStateConflictError(
+            'This upload changed during processing.',
+          );
+        }
+
+        return tx.projectMedia.findUniqueOrThrow({
+          where: { id: media.id },
+          select: MEDIA_SELECT,
+        });
+      },
+    );
+  } catch (error) {
+    // A timed-out R2 request can still commit remotely.
+    //
+    // Also treat failures after a preview PUT has started
+    // as ambiguous, unless the payload was definitively
+    // rejected as invalid.
+    //
+    // Leave FINALIZING in place. The reconciliation worker
+    // can reclaim it after the abandonment window.
+    if (
+      error instanceof MediaStorageTimeoutError ||
+      (
+        previewWriteStarted &&
+        !(error instanceof MediaUploadInvalidError)
+      )
+    ) {
+      throw error;
+    }
+
+    // Invalid image data is terminal; a missing upload
+    // or transient storage failure may be retried.
+    //
+    // If the project/account was deleted, updateMany
+    // affects zero records and cannot resurrect it.
+    const nextStatus =
+      error instanceof MediaUploadInvalidError
+        ? 'FAILED'
+        : 'PENDING';
+
+    try {
+      await prisma.projectMedia.updateMany({
         where: {
-          id: mediaId,
+          id: media.id,
           projectId,
-          status: 'PENDING',
+          status: 'FINALIZING',
           version: media.version,
         },
-
         data: {
-          status: 'READY',
-          previewKey,
-          width: processed.width,
-          height: processed.height,
-          readyAt: new Date(),
-          version: { increment: 1 },
+          status: nextStatus,
         },
       });
+    } catch {
+      // A database outage or process interruption may
+      // leave the FINALIZING record in place.
+      // The existing reconciliation worker will recover
+      // it after the abandonment threshold.
+    }
 
-      if (updated.count !== 1) {
-        throw new MediaStateConflictError(
-          'This image was already updated. Refresh your media list.',
-        );
-      }
-
-      return tx.projectMedia.findUniqueOrThrow({
-        where: { id: mediaId },
-        select: MEDIA_SELECT,
-      });
-    },
-  );
+    throw error;
+  }
 }
