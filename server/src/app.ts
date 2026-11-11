@@ -1,23 +1,16 @@
 import express from 'express';
-import type { ErrorRequestHandler } from 'express';
-
-import { healthRouter } from './modules/health/health.routes.js';
-import { authRouter } from './modules/auth/auth.routes.js';
-
+import type {ErrorRequestHandler} from 'express';
+import {healthRouter} from './modules/health/health.routes.js';
+import {authRouter} from './modules/auth/auth.routes.js';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
-
-import { verifyRequestOrigin } from './middleware/verify-request-origin.js';
-import { apiCors } from './middleware/api-cors.js';
-import { profileRouter } from './modules/freelancer/profile.routes.js';
-import { projectRouter } from './modules/freelancer/project.routes.js';
+import {verifyRequestOrigin} from './middleware/verify-request-origin.js';
+import {apiCors} from './middleware/api-cors.js';
+import {profileRouter} from './modules/freelancer/profile.routes.js';
+import {projectRouter} from './modules/freelancer/project.routes.js';
 import {projectMediaRouter} from './modules/freelancer/project-media.routes.js';
-import { skillRouter } from './modules/freelancer/skill.routes.js';
-
-import {
-  freelancerRouter,
-  publicFreelancerRouter,
-} from './modules/freelancer/username.routes.js';
+import {skillRouter} from './modules/freelancer/skill.routes.js';
+import {freelancerRouter, publicFreelancerRouter} from './modules/freelancer/username.routes.js';
 
 export const app = express();
 
@@ -67,7 +60,25 @@ app.use((_req, res) => {
 });
 
 const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
-  console.error(error);
+  
+  // Never print raw unexpected error objects.
+  // They may include credentials, URLs or request data.
+  const rawCategory =
+    error instanceof Error
+      ? error.name
+      : 'UnknownError';
+
+  const category =
+    /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(
+      rawCategory,
+    )
+      ? rawCategory
+      : 'UnknownError';
+
+  console.error(
+    'Unhandled API error:',
+    category,
+  );
 
   const status =
     error !== null &&

@@ -3,6 +3,9 @@ import {prisma} from './database/prisma.js';
 import {startStorageDeletionWorker} from './modules/freelancer/storage-deletion.queue.js';
 import {startMediaReconciliationWorker} from './modules/freelancer/project-media.reconciliation.js';
 import {startMediaHealthMonitor} from './modules/freelancer/media-health.monitor.js';
+import {assertProductionConfiguration} from './config/production-preflight.js';
+
+assertProductionConfiguration();
 
 const port = Number(process.env.PORT ?? 5001);
 
