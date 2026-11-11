@@ -195,21 +195,23 @@ async function queuedKeys() {
 
 after(async () => {
   try {
-    if (createdObjectKeys.length > 0) {
-      await prisma.storageDeletionJob.deleteMany({
-        where: {
-          objectKey: {
-            in: createdObjectKeys,
-          },
-        },
-      });
-    }
-
+    // 1. Delete test users first.
     if (createdUserIds.length > 0) {
       await prisma.user.deleteMany({
         where: {
           id: {
             in: createdUserIds,
+          },
+        },
+      });
+    }
+
+    // 2. Clean up their storage deletion jobs.
+    if (createdObjectKeys.length > 0) {
+      await prisma.storageDeletionJob.deleteMany({
+        where: {
+          objectKey: {
+            in: createdObjectKeys,
           },
         },
       });

@@ -104,6 +104,14 @@ async function remainingMedia() {
 
 after(async () => {
   try {
+    // 1. Delete the temporary account first.
+    if (userId) {
+      await prisma.user.delete({
+        where: { id: userId },
+      });
+    }
+
+    // 2. Remove the test-owned cleanup jobs.
     await prisma.storageDeletionJob.deleteMany({
       where: {
         objectKey: {
@@ -111,12 +119,6 @@ after(async () => {
         },
       },
     });
-
-    if (userId) {
-      await prisma.user.delete({
-        where: { id: userId },
-      });
-    }
   } finally {
     await prisma.$disconnect();
   }

@@ -162,15 +162,22 @@ async function jobsFor(f: Fixture) {
 
 after(async () => {
   try {
-    await prisma.storageDeletionJob.deleteMany({
+    // 1. Delete test users and their projects.
+    await prisma.user.deleteMany({
       where: {
-        objectKey: { in: storageKeys },
+        id: {
+          in: userIds,
+        },
       },
     });
 
-    await prisma.user.deleteMany({
+    // 2. Remove test-owned cleanup jobs after
+    // the database deletion triggers execute.
+    await prisma.storageDeletionJob.deleteMany({
       where: {
-        id: { in: userIds },
+        objectKey: {
+          in: storageKeys,
+        },
       },
     });
   } finally {

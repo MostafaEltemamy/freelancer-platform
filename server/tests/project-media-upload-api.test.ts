@@ -1,24 +1,12 @@
 import 'dotenv/config';
-
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
-import { after, test } from 'node:test';
-
+import {randomUUID} from 'node:crypto';
+import {after, test} from 'node:test';
 import sharp from 'sharp';
-
-import { prisma } from '../src/database/prisma.js';
-
-import {
-  generateSessionToken,
-} from '../src/modules/auth/session-tokens.js';
-
-import {
-  SESSION_COOKIE_NAME,
-} from '../src/modules/auth/session-cookie.js';
-
-import {
-  deleteStoredObject,
-} from '../src/modules/freelancer/project-media.storage.js';
+import {prisma} from '../src/database/prisma.js';
+import {generateSessionToken} from '../src/modules/auth/session-tokens.js';
+import {SESSION_COOKIE_NAME} from '../src/modules/auth/session-cookie.js';
+import {deleteStoredObject} from '../src/modules/freelancer/project-media.storage.js';
 
 const ENABLED =
   process.env.MEDIA_E2E_TESTS === '1';
@@ -171,6 +159,7 @@ function request(
 after(async () => {
   if (!ENABLED) return;
 
+  const testObjectKeys: string[] = [];
   try {
     if (projectId) {
       const stored = await prisma.projectMedia.findMany({
@@ -182,8 +171,12 @@ after(async () => {
       });
 
       for (const item of stored) {
-        await deleteStoredObject(item.storageKey);
+        testObjectKeys.push(item.storageKey);
+        if (item.previewKey) {
+          testObjectKeys.push(item.previewKey);
+        }
 
+        await deleteStoredObject(item.storageKey);
         if (item.previewKey) {
           await deleteStoredObject(item.previewKey);
         }
@@ -197,6 +190,17 @@ after(async () => {
         },
       });
     }
+    
+    if (testObjectKeys.length > 0) {
+      await prisma.storageDeletionJob.deleteMany({
+        where: {
+          objectKey: {
+            in: testObjectKeys,
+          },
+        },
+      });
+    }
+
   } finally {
     await prisma.$disconnect();
   }

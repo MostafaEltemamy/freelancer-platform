@@ -207,21 +207,26 @@ async function queuedKeys() {
 
 after(async () => {
   try {
-    if (createdObjectKeys.length > 0) {
-      await prisma.storageDeletionJob.deleteMany({
-        where: {
-          objectKey: {
-            in: createdObjectKeys,
-          },
-        },
-      });
-    }
-
+    // 1. Delete test accounts FIRST.
+    // Their media records may create cleanup jobs
+    // through the new PostgreSQL trigger.
     if (createdUserIds.length > 0) {
       await prisma.user.deleteMany({
         where: {
           id: {
             in: createdUserIds,
+          },
+        },
+      });
+    }
+
+    // 2. Remove only test-owned cleanup jobs AFTER
+    // account deletion and its database triggers.
+    if (createdObjectKeys.length > 0) {
+      await prisma.storageDeletionJob.deleteMany({
+        where: {
+          objectKey: {
+            in: createdObjectKeys,
           },
         },
       });
