@@ -4,7 +4,9 @@ import {startStorageDeletionWorker} from './modules/freelancer/storage-deletion.
 import {startMediaReconciliationWorker} from './modules/freelancer/project-media.reconciliation.js';
 import {startMediaHealthMonitor} from './modules/freelancer/media-health.monitor.js';
 import {assertProductionConfiguration} from './config/production-preflight.js';
+import {assertDeploymentIsolation} from './config/deployment-isolation.js';
 
+assertDeploymentIsolation();
 assertProductionConfiguration();
 
 const port = Number(process.env.PORT ?? 5001);
